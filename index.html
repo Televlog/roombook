@@ -370,13 +370,8 @@ select option{background:var(--surface2);}
     <div class="login-logo" id="loginLogoDiv">Meeting Room <span>Booking</span></div>
     <div class="login-sub">Meeting Room Management System</div>
     <div class="login-icon">🏢</div>
-    <div class="login-heading">Welcome back</div>
-    <div class="login-desc">Sign in with your Microsoft organization account to book and manage meeting rooms.</div>
-
-    <div class="config-warn" id="configNotice">
-      <strong>⚙️ Setup Required</strong>
-      Replace <code>YOUR_CLIENT_ID</code> and <code>YOUR_TENANT_ID</code> in the CONFIG block inside the &lt;script&gt; section before using SSO.
-    </div>
+    <div class="login-heading">FrontDesk Access</div>
+    <div class="login-desc">Sign in with the <strong style="color:var(--accent)">FrontDesk@inseab.com</strong> account to view and manage all meeting room bookings.</div>
 
     <button class="btn-ms" onclick="signIn()">
       <svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
@@ -385,7 +380,7 @@ select option{background:var(--surface2);}
         <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
         <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
       </svg>
-      Sign in with Microsoft
+      Sign in with FrontDesk Account
     </button>
 
     <div class="divider">or</div>
@@ -394,7 +389,7 @@ select option{background:var(--surface2);}
       🛡️ Admin Login
     </button>
 
-    <p class="login-note">Staff sign in via Microsoft SSO · Admin access requires separate password.<br>Only <strong>organization accounts</strong> permitted.</p>
+    <p class="login-note">This system is accessed exclusively via the <strong>FrontDesk@inseab.com</strong> Microsoft account.<br>Admin login is for room configuration only.</p>
   </div>
 </div>
 
@@ -646,7 +641,14 @@ async function signIn(){
   if(!initMSAL()){ showToast('⚙️','Configure Azure Client ID first','error'); return; }
   showScreen('loadingScreen');
   try{
-    const r = await msalInstance.loginPopup({scopes:CONFIG.scopes,prompt:'select_account'});
+    const r = await msalInstance.loginPopup({scopes:CONFIG.scopes,prompt:'select_account',loginHint:CONFIG.meetingEmail});
+    const email=(r.account.username||'').toLowerCase();
+    if(email!==CONFIG.meetingEmail.toLowerCase()){
+      await msalInstance.logoutPopup({account:r.account}).catch(()=>{});
+      showScreen('loginScreen');
+      showToast('🚫',`Only ${CONFIG.meetingEmail} is allowed to sign in.`,'error');
+      return;
+    }
     accessToken=r.accessToken; currentUser=r.account;
     await onSignInSuccess();
   }catch(e){
@@ -793,22 +795,21 @@ async function syncCalendar(){
     const s=now.toISOString();
     const e=new Date(now.getTime()+60*864e5).toISOString();
     const params=`?startDateTime=${s}&endDateTime=${e}&$select=id,subject,organizer,start,end,attendees,location&$top=200`;
-    const data=await graphGet(`/users/${CONFIG.meetingEmail}/calendar/calendarView${params}`);
+    const data=await graphGet(`/me/calendar/calendarView${params}`);
     if(data?.value){
       bookings=data.value.map(ev=>{
         const sd=new Date(ev.start.dateTime+(ev.start.timeZone==='UTC'?'Z':''));
         const ed=new Date(ev.end.dateTime+(ev.end.timeZone==='UTC'?'Z':''));
         const locName=ev.location?.displayName||'';
         const roomByLoc=ROOMS.find(r=>locName.toLowerCase().includes(r.name.toLowerCase()));
-        const roomByEmail=resolveRoomId(ev.attendees?.find(a=>a.type==='resource')?.emailAddress?.address);
-        const room=roomByLoc?.id||roomByEmail||null;
+        const room=roomByLoc?.id||null;
         return{id:'ms_'+ev.id,msId:ev.id,date:dateKey(sd),room,title:ev.subject||'(No title)',organizer:ev.organizer?.emailAddress?.name||'—',start:fmt2(sd.getHours())+':'+fmt2(sd.getMinutes()),end:fmt2(ed.getHours())+':'+fmt2(ed.getMinutes()),attendees:ev.attendees?.length||'?',fromMS:true};
       }).filter(b=>b.room!==null);
       setSyncStatus('synced',`Live · ${bookings.length} bookings`);
       renderCalendar(); renderView();
     }else{
-      setSyncStatus('synced','Access denied');
-      showToast('🔒','Cannot access FrontDesk calendar — grant delegate access in Exchange.','error');
+      setSyncStatus('synced','Sync error');
+      showToast('⚠️','Could not load calendar. Please sign in again.','error');
     }
   }catch(e){setSyncStatus('synced','Sync failed');showToast('⚠️','Calendar sync failed','error');}
 }
@@ -821,9 +822,9 @@ async function createMSEvent(booking){
     location:{displayName:room?.name||booking.room},
     body:{contentType:'Text',content:`Room: ${room?.name||booking.room}\nOrganizer: ${booking.organizer}\nAttendees: ${booking.attendees}`}
   };
-  return await graphPost(`/users/${CONFIG.meetingEmail}/events`,body);
+  return await graphPost(`/me/events`,body);
 }
-async function deleteMSEvent(msId){ if(msId) await graphDelete(`/users/${CONFIG.meetingEmail}/events/${msId}`); }
+async function deleteMSEvent(msId){ if(msId) return await graphDelete(`/me/events/${msId}`); }
 function resolveRoomId(email){
   const map={'meetingroom1@yourorg.com':'R1','meetingroom2@yourorg.com':'R2','meetingroom3@yourorg.com':'R3','bigroom@yourorg.com':'R4','hub1@yourorg.com':'R5','hub2@yourorg.com':'R6','hub3@yourorg.com':'R7','hub4@yourorg.com':'R8'};
   return map[email?.toLowerCase()]||'R1';
@@ -854,7 +855,7 @@ function fmt2(n){return String(n).padStart(2,'0');}
 const HOURS=['08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00'];
 const today=new Date();
 let selectedDate=new Date(today), calYear=today.getFullYear(), calMonth=today.getMonth();
-let bookings=[], currentView='rooms', selectedBookingId=null;
+let bookings=[], currentView='timeline', selectedBookingId=null;
 function dateKey(d){return`${d.getFullYear()}-${fmt2(d.getMonth()+1)}-${fmt2(d.getDate())}`;}
 function selectedKey(){return dateKey(selectedDate);}
 
@@ -1521,9 +1522,10 @@ window.addEventListener('load',async()=>{
   applyLogo();
   if(!initMSAL()) return;
   const accounts=msalInstance.getAllAccounts();
-  if(accounts.length>0){
+  const frontdeskAccount=accounts.find(a=>a.username.toLowerCase()===CONFIG.meetingEmail.toLowerCase());
+  if(frontdeskAccount){
     showScreen('loadingScreen');
-    currentUser=accounts[0];
+    currentUser=frontdeskAccount;
     try{
       const r=await msalInstance.acquireTokenSilent({scopes:CONFIG.scopes,account:currentUser});
       accessToken=r.accessToken;
