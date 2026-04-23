@@ -661,6 +661,9 @@ async function onSignInSuccess(){
   const initials=name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase();
   setUserUI(initials,name,email,false);
   document.getElementById('organizer').value=name;
+  // Clear any leftover demo/seed data so only real M365 events show
+  localStorage.removeItem('rb_bookings');
+  bookings=[];
   await syncCalendar();
   initApp();
   showScreen('appScreen');
@@ -787,12 +790,20 @@ async function syncCalendar(){
     const now=new Date();
     const s=now.toISOString();
     const e=new Date(now.getTime()+30*864e5).toISOString();
-    const data=await graphGet(`/users/${CONFIG.meetingEmail}/calendar/calendarView?startDateTime=${s}&endDateTime=${e}&$select=id,subject,organizer,start,end,attendees&$top=100`);
+    const params=`?startDateTime=${s}&endDateTime=${e}&$select=id,subject,organizer,start,end,attendees,location&$top=100`;
+    // Try FrontDesk calendar first; fall back to signed-in user's own calendar
+    let data=await graphGet(`/users/${CONFIG.meetingEmail}/calendar/calendarView${params}`);
+    if(!data?.value) data=await graphGet(`/me/calendar/calendarView${params}`);
     if(data?.value){
       const msB=data.value.map(ev=>{
         const sd=new Date(ev.start.dateTime+(ev.start.timeZone==='UTC'?'Z':''));
         const ed=new Date(ev.end.dateTime+(ev.end.timeZone==='UTC'?'Z':''));
-        return{id:'ms_'+ev.id,msId:ev.id,date:dateKey(sd),room:resolveRoomId(ev.attendees?.find(a=>a.type==='resource')?.emailAddress?.address),title:ev.subject||'(No title)',organizer:ev.organizer?.emailAddress?.name||'—',start:fmt2(sd.getHours())+':'+fmt2(sd.getMinutes()),end:fmt2(ed.getHours())+':'+fmt2(ed.getMinutes()),attendees:ev.attendees?.length||'?',fromMS:true};
+        // Resolve room from location name or attendee resource email
+        const locName=ev.location?.displayName||'';
+        const roomByLoc=ROOMS.find(r=>locName.toLowerCase().includes(r.name.toLowerCase()));
+        const roomByEmail=resolveRoomId(ev.attendees?.find(a=>a.type==='resource')?.emailAddress?.address);
+        const room=roomByLoc?.id||roomByEmail||'R1';
+        return{id:'ms_'+ev.id,msId:ev.id,date:dateKey(sd),room,title:ev.subject||'(No title)',organizer:ev.organizer?.emailAddress?.name||'—',start:fmt2(sd.getHours())+':'+fmt2(sd.getMinutes()),end:fmt2(ed.getHours())+':'+fmt2(ed.getMinutes()),attendees:ev.attendees?.length||'?',fromMS:true};
       });
       const localOnly=bookings.filter(b=>!b.fromMS);
       bookings=[...localOnly,...msB];
@@ -841,17 +852,11 @@ let bookings=[], currentView='rooms', selectedBookingId=null;
 function dateKey(d){return`${d.getFullYear()}-${fmt2(d.getMonth()+1)}-${fmt2(d.getDate())}`;}
 function selectedKey(){return dateKey(selectedDate);}
 
-// Seed demo bookings if none saved
+// Only seed demo bookings for admin mode (not for real MS logins)
 function seedIfEmpty(){
+  if(currentUser) return; // MS-authenticated: use only real calendar data
   if(getBookingsStore().length>0){bookings=getBookingsStore();return;}
-  const k=dateKey(today);
-  bookings=[
-    {id:'b1',date:k,room:'R1',title:'Design Sprint',organizer:'Sara K.',start:'09:00',end:'10:30',attendees:4,fromMS:false},
-    {id:'b2',date:k,room:'R2',title:'Product Sync',organizer:'Tom W.',start:'10:00',end:'11:00',attendees:6,fromMS:false},
-    {id:'b3',date:k,room:'R4',title:'All-Hands Q3',organizer:'CEO',start:'11:00',end:'12:30',attendees:18,fromMS:false},
-    {id:'b4',date:k,room:'R3',title:'Client Demo',organizer:'Sales',start:'14:00',end:'15:00',attendees:5,fromMS:false},
-    {id:'b5',date:k,room:'R5',title:'Dev Standup',organizer:'Dev Team',start:'09:30',end:'10:00',attendees:8,fromMS:false},
-  ];
+  bookings=[];
   saveBookingsStore();
 }
 
