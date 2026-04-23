@@ -816,7 +816,10 @@ async function syncCalendar(){
     const s=now.toISOString();
     const e=new Date(now.getTime()+60*864e5).toISOString();
     const params=`?startDateTime=${s}&endDateTime=${e}&$select=id,subject,organizer,start,end,attendees,location&$top=200`;
-    const data=await graphGet(`/users/${CONFIG.meetingEmail}/calendar/calendarView${params}`);
+    // Try FrontDesk calendar; fall back to signed-in user's own calendar
+    let data=await graphGet(`/users/${CONFIG.meetingEmail}/calendar/calendarView${params}`);
+    const usingFrontDesk=!!data?.value;
+    if(!data?.value) data=await graphGet(`/me/calendar/calendarView${params}`);
     if(data?.value){
       bookings=data.value.map(ev=>{
         const sd=new Date(ev.start.dateTime+(ev.start.timeZone==='UTC'?'Z':''));
@@ -826,13 +829,12 @@ async function syncCalendar(){
         const room=roomByLoc?.id||null;
         return{id:'ms_'+ev.id,msId:ev.id,date:dateKey(sd),room,title:ev.subject||'(No title)',organizer:ev.organizer?.emailAddress?.name||'—',start:fmt2(sd.getHours())+':'+fmt2(sd.getMinutes()),end:fmt2(ed.getHours())+':'+fmt2(ed.getMinutes()),attendees:ev.attendees?.length||'?',fromMS:true};
       }).filter(b=>b.room!==null);
-      setSyncStatus('synced',`Live · ${bookings.length} bookings`);
+      setSyncStatus('synced',usingFrontDesk?`Live · ${bookings.length} bookings`:`My calendar · run permission script`);
       renderCalendar(); renderView();
     }else{
       setSyncStatus('synced','Sync error');
-      showToast('⚠️','Could not load calendar. Please sign in again.','error');
     }
-  }catch(e){setSyncStatus('synced','Sync failed');showToast('⚠️','Calendar sync failed','error');}
+  }catch(e){setSyncStatus('synced','Sync failed');}
 }
 async function createMSEvent(booking){
   const room=ROOMS.find(r=>r.id===booking.room);
@@ -843,9 +845,20 @@ async function createMSEvent(booking){
     location:{displayName:room?.name||booking.room},
     body:{contentType:'Text',content:`Room: ${room?.name||booking.room}\nOrganizer: ${booking.organizer}\nAttendees: ${booking.attendees}`}
   };
-  return await graphPost(`/users/${CONFIG.meetingEmail}/events`,body);
+  // Try FrontDesk calendar directly; fall back to own calendar + invite FrontDesk
+  let result=await graphPost(`/users/${CONFIG.meetingEmail}/events`,body);
+  if(!result){
+    body.attendees=[{emailAddress:{address:CONFIG.meetingEmail,name:'Front Desk'},type:'required'}];
+    result=await graphPost(`/me/events`,body);
+  }
+  return result;
 }
-async function deleteMSEvent(msId){ if(msId) return await graphDelete(`/users/${CONFIG.meetingEmail}/events/${msId}`); }
+async function deleteMSEvent(msId){
+  if(!msId) return false;
+  let ok=await graphDelete(`/users/${CONFIG.meetingEmail}/events/${msId}`);
+  if(!ok) ok=await graphDelete(`/me/events/${msId}`);
+  return ok;
+}
 function resolveRoomId(email){
   const map={'meetingroom1@yourorg.com':'R1','meetingroom2@yourorg.com':'R2','meetingroom3@yourorg.com':'R3','bigroom@yourorg.com':'R4','hub1@yourorg.com':'R5','hub2@yourorg.com':'R6','hub3@yourorg.com':'R7','hub4@yourorg.com':'R8'};
   return map[email?.toLowerCase()]||'R1';
