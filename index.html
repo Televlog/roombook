@@ -1539,28 +1539,20 @@ function getLogo(){ return localStorage.getItem('rb_logo')||''; }
 function saveLogo(data){ localStorage.setItem('rb_logo',data); }
 function removeLogo(){ localStorage.removeItem('rb_logo'); }
 function applyLogo(){
-  const logo=getLogo();
+  // Use uploaded logo from localStorage, or fall back to repo logo.png
+  const logo=getLogo()||'logo.png';
   const appImg=document.getElementById('appLogoImg');
   const appText=document.getElementById('appLogoText');
   const adminImg=document.getElementById('adminLogoImg');
   const adminText=document.getElementById('adminLogoText');
   const loginImg=document.getElementById('loginLogoImg');
   const loginDiv=document.getElementById('loginLogoDiv');
-  if(logo){
-    if(appImg){appImg.src=logo;appImg.style.display='inline-block';}
-    if(appText) appText.style.display='none';
-    if(adminImg){adminImg.src=logo;adminImg.style.display='inline-block';}
-    if(adminText) adminText.style.display='none';
-    if(loginImg){loginImg.src=logo;loginImg.style.display='block';}
-    if(loginDiv) loginDiv.style.display='none';
-  }else{
-    if(appImg) appImg.style.display='none';
-    if(appText) appText.style.display='';
-    if(adminImg) adminImg.style.display='none';
-    if(adminText) adminText.style.display='';
-    if(loginImg) loginImg.style.display='none';
-    if(loginDiv) loginDiv.style.display='';
-  }
+  if(appImg){appImg.src=logo;appImg.style.display='inline-block';appImg.style.height='30px';}
+  if(appText) appText.style.display='none';
+  if(adminImg){adminImg.src=logo;adminImg.style.display='inline-block';adminImg.style.height='30px';}
+  if(adminText) adminText.style.display='none';
+  if(loginImg){loginImg.src=logo;loginImg.style.display='block';loginImg.style.maxHeight='60px';}
+  if(loginDiv) loginDiv.style.display='none';
 }
 function handleLogoUpload(input){
   const file=input.files[0];
