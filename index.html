@@ -661,16 +661,17 @@ async function onSignInSuccess(){
   const initials=name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase();
   setUserUI(initials,name,email,false);
   document.getElementById('organizer').value=name;
-  // Clear any leftover demo/seed data so only real M365 events show
   localStorage.removeItem('rb_bookings');
   bookings=[];
   await syncCalendar();
   initApp();
+  startAutoSync();
   showScreen('appScreen');
   showToast('👋',`Welcome, ${name.split(' ')[0]}!`,'success');
 }
 
 async function signOut(){
+  stopAutoSync();
   if(msalInstance) await msalInstance.logoutPopup().catch(()=>{});
   currentUser=null; accessToken=null; bookings=[];
   isAdminMode=false;
@@ -717,6 +718,7 @@ function enterAdminMode(){
 }
 
 function adminSignOut(){
+  stopAutoSync();
   isAdminMode=false;
   bookings=[];
   showScreen('loginScreen');
@@ -789,27 +791,25 @@ async function syncCalendar(){
   try{
     const now=new Date();
     const s=now.toISOString();
-    const e=new Date(now.getTime()+30*864e5).toISOString();
-    const params=`?startDateTime=${s}&endDateTime=${e}&$select=id,subject,organizer,start,end,attendees,location&$top=100`;
-    // Try FrontDesk calendar first; fall back to signed-in user's own calendar
-    let data=await graphGet(`/users/${CONFIG.meetingEmail}/calendar/calendarView${params}`);
-    if(!data?.value) data=await graphGet(`/me/calendar/calendarView${params}`);
+    const e=new Date(now.getTime()+60*864e5).toISOString();
+    const params=`?startDateTime=${s}&endDateTime=${e}&$select=id,subject,organizer,start,end,attendees,location&$top=200`;
+    const data=await graphGet(`/users/${CONFIG.meetingEmail}/calendar/calendarView${params}`);
     if(data?.value){
-      const msB=data.value.map(ev=>{
+      bookings=data.value.map(ev=>{
         const sd=new Date(ev.start.dateTime+(ev.start.timeZone==='UTC'?'Z':''));
         const ed=new Date(ev.end.dateTime+(ev.end.timeZone==='UTC'?'Z':''));
-        // Resolve room from location name or attendee resource email
         const locName=ev.location?.displayName||'';
         const roomByLoc=ROOMS.find(r=>locName.toLowerCase().includes(r.name.toLowerCase()));
         const roomByEmail=resolveRoomId(ev.attendees?.find(a=>a.type==='resource')?.emailAddress?.address);
-        const room=roomByLoc?.id||roomByEmail||'R1';
+        const room=roomByLoc?.id||roomByEmail||null;
         return{id:'ms_'+ev.id,msId:ev.id,date:dateKey(sd),room,title:ev.subject||'(No title)',organizer:ev.organizer?.emailAddress?.name||'—',start:fmt2(sd.getHours())+':'+fmt2(sd.getMinutes()),end:fmt2(ed.getHours())+':'+fmt2(ed.getMinutes()),attendees:ev.attendees?.length||'?',fromMS:true};
-      });
-      const localOnly=bookings.filter(b=>!b.fromMS);
-      bookings=[...localOnly,...msB];
-      setSyncStatus('synced',`Synced ${msB.length} events`);
+      }).filter(b=>b.room!==null);
+      setSyncStatus('synced',`Live · ${bookings.length} bookings`);
       renderCalendar(); renderView();
-    }else setSyncStatus('synced','Synced');
+    }else{
+      setSyncStatus('synced','Access denied');
+      showToast('🔒','Cannot access FrontDesk calendar — grant delegate access in Exchange.','error');
+    }
   }catch(e){setSyncStatus('synced','Sync failed');showToast('⚠️','Calendar sync failed','error');}
 }
 async function createMSEvent(booking){
@@ -819,15 +819,11 @@ async function createMSEvent(booking){
     start:{dateTime:`${booking.date}T${booking.start}:00`,timeZone:'Asia/Dubai'},
     end:{dateTime:`${booking.date}T${booking.end}:00`,timeZone:'Asia/Dubai'},
     location:{displayName:room?.name||booking.room},
-    attendees:[{emailAddress:{address:CONFIG.meetingEmail,name:'Front Desk'},type:'required'}],
     body:{contentType:'Text',content:`Room: ${room?.name||booking.room}\nOrganizer: ${booking.organizer}\nAttendees: ${booking.attendees}`}
   };
-  // Try to write to FrontDesk calendar directly; falls back to signed-in user's calendar
-  const result=await graphPost(`/users/${CONFIG.meetingEmail}/events`,body);
-  if(result) return result;
-  return await graphPost('/me/events',body);
+  return await graphPost(`/users/${CONFIG.meetingEmail}/events`,body);
 }
-async function deleteMSEvent(msId){ if(msId) await graphDelete(`/me/events/${msId}`); }
+async function deleteMSEvent(msId){ if(msId) await graphDelete(`/users/${CONFIG.meetingEmail}/events/${msId}`); }
 function resolveRoomId(email){
   const map={'meetingroom1@yourorg.com':'R1','meetingroom2@yourorg.com':'R2','meetingroom3@yourorg.com':'R3','bigroom@yourorg.com':'R4','hub1@yourorg.com':'R5','hub2@yourorg.com':'R6','hub3@yourorg.com':'R7','hub4@yourorg.com':'R8'};
   return map[email?.toLowerCase()]||'R1';
@@ -838,7 +834,17 @@ function setSyncStatus(state,text){
   if(!b||!l) return;
   b.className='sync-badge'+(state==='syncing'?' syncing':'');
   l.textContent=text;
-  if(state==='synced') setTimeout(()=>{l.textContent='Synced with M365';},3000);
+}
+// Auto-refresh every 60 seconds for near-real-time availability
+let _autoSyncTimer=null;
+function startAutoSync(){
+  stopAutoSync();
+  _autoSyncTimer=setInterval(async()=>{
+    if(currentUser||isAdminMode) await syncCalendar();
+  },60000);
+}
+function stopAutoSync(){
+  if(_autoSyncTimer){clearInterval(_autoSyncTimer);_autoSyncTimer=null;}
 }
 function fmt2(n){return String(n).padStart(2,'0');}
 
@@ -928,16 +934,34 @@ async function bookRoom(){
   const end=document.getElementById('endTime').value;
   const attendees=document.getElementById('attendees').value||'?';
   if(!title||!organizer||!room){showToast('⚠️','Please fill all required fields.','error');return;}
-  const id='b'+Date.now();
-  const booking={id,date:selectedKey(),room,title,organizer,start,end,attendees,fromMS:false};
-  bookings.push(booking);
-  saveBookingsStore();
+  const btn=document.getElementById('bookBtn');
+  btn.disabled=true; btn.textContent='Checking availability…';
+  // Fresh sync from FrontDesk calendar to prevent double booking
+  await syncCalendar();
+  const conflict=bookings.find(b=>b.room===room&&b.date===selectedKey()&&overlaps(start,end,b.start,b.end));
+  if(conflict){
+    showToast('⛔',`Already booked: "${conflict.title}" (${conflict.start}–${conflict.end})`, 'error');
+    checkConflict();
+    btn.disabled=false; btn.textContent='Confirm Booking';
+    return;
+  }
+  btn.textContent='Creating booking…';
   setSyncStatus('syncing','Creating event…');
+  const booking={id:'b'+Date.now(),date:selectedKey(),room,title,organizer,start,end,attendees,fromMS:false};
   const created=await createMSEvent(booking);
-  if(created?.id){booking.msId=created.id;booking.fromMS=true;setSyncStatus('synced','Synced to M365');showToast('✅',`"${title}" booked & synced!`,'success');}
-  else{setSyncStatus('synced','Saved locally');showToast('✅',`"${title}" booked.`,'success');}
-  document.getElementById('meetingTitle').value='';document.getElementById('roomSelect').value='';document.getElementById('attendees').value='';document.getElementById('availableBadge').classList.remove('visible');
-  renderCalendar();renderView();
+  if(created?.id){
+    showToast('✅',`"${title}" booked successfully!`,'success');
+    await syncCalendar(); // re-sync so new booking shows immediately
+  }else{
+    showToast('❌','Booking failed — check FrontDesk calendar permissions.','error');
+    setSyncStatus('synced','Booking failed');
+  }
+  btn.disabled=false; btn.textContent='Confirm Booking';
+  document.getElementById('meetingTitle').value='';
+  document.getElementById('roomSelect').value='';
+  document.getElementById('attendees').value='';
+  document.getElementById('availableBadge').classList.remove('visible');
+  renderCalendar(); renderView();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -1018,11 +1042,17 @@ function openModal(bid){
 function closeModal(e){if(e&&e.target!==document.getElementById('modalOverlay'))return;document.getElementById('modalOverlay').classList.remove('open');}
 async function deleteBooking(id){
   const b=bookings.find(x=>x.id===id);
-  bookings=bookings.filter(x=>x.id!==id);
-  saveBookingsStore();
-  showToast('🗑️',`"${b?.title}" cancelled.`,'error');
-  if(b?.msId){setSyncStatus('syncing','Removing…');await deleteMSEvent(b.msId);setSyncStatus('synced','Removed');}
-  renderCalendar();renderView();
+  if(!b?.msId){showToast('⚠️','Cannot cancel — not linked to FrontDesk calendar.','error');return;}
+  setSyncStatus('syncing','Cancelling…');
+  const ok=await deleteMSEvent(b.msId);
+  if(ok){
+    showToast('🗑️',`"${b.title}" cancelled.`,'error');
+    await syncCalendar();
+  }else{
+    showToast('❌','Could not cancel — check FrontDesk calendar permissions.','error');
+    setSyncStatus('synced','Cancel failed');
+  }
+  renderCalendar(); renderView();
 }
 
 // ════════════════════════════════════════════════════════════
