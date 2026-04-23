@@ -438,6 +438,7 @@ select option{background:var(--surface2);}
     <div class="logo"><img id="appLogoImg" style="display:none;height:30px;object-fit:contain;vertical-align:middle;margin-right:6px;"><span id="appLogoText">Meeting Room <span>Booking</span></span><span id="adminBadgeHeader" class="admin-badge" style="display:none">ADMIN</span></div>
     <div class="header-right">
       <div class="sync-badge" id="syncBadge"><div class="sync-dot"></div><span id="syncText">Synced</span></div>
+      <button onclick="syncCalendar()" style="background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.25);color:var(--accent);border-radius:20px;padding:4px 12px;font-size:.72rem;cursor:pointer;font-family:'DM Sans',sans-serif;" title="Refresh calendar now">⟳ Refresh</button>
       <div class="header-date" id="headerDate"></div>
       <div class="header-nav" id="adminHeaderNav" style="display:none">
         <button class="header-nav-btn active" onclick="switchToApp(this)">📅 Bookings</button>
@@ -824,12 +825,17 @@ async function syncCalendar(){
       bookings=data.value.map(ev=>{
         const sd=new Date(ev.start.dateTime+(ev.start.timeZone==='UTC'?'Z':''));
         const ed=new Date(ev.end.dateTime+(ev.end.timeZone==='UTC'?'Z':''));
-        const locName=ev.location?.displayName||'';
-        const roomByLoc=ROOMS.find(r=>locName.toLowerCase().includes(r.name.toLowerCase()));
-        const room=roomByLoc?.id||null;
+        // Match room by location field OR event subject (in case location is not set)
+        const locName=(ev.location?.displayName||'').toLowerCase();
+        const subject=(ev.subject||'').toLowerCase();
+        const combined=locName+' '+subject;
+        // Sort rooms longest-name-first so "Big Meeting Room" matches before "Meeting Room"
+        const sortedRooms=[...ROOMS].sort((a,b)=>b.name.length-a.name.length);
+        const matched=sortedRooms.find(r=>combined.includes(r.name.toLowerCase()));
+        const room=matched?.id||null;
         return{id:'ms_'+ev.id,msId:ev.id,date:dateKey(sd),room,title:ev.subject||'(No title)',organizer:ev.organizer?.emailAddress?.name||'—',start:fmt2(sd.getHours())+':'+fmt2(sd.getMinutes()),end:fmt2(ed.getHours())+':'+fmt2(ed.getMinutes()),attendees:ev.attendees?.length||'?',fromMS:true};
       }).filter(b=>b.room!==null);
-      setSyncStatus('synced',usingFrontDesk?`Live · ${bookings.length} bookings`:`My calendar · run permission script`);
+      setSyncStatus('synced',usingFrontDesk?`Live · ${bookings.length} bookings`:`My calendar · ${bookings.length} bookings`);
       renderCalendar(); renderView();
     }else{
       setSyncStatus('synced','Sync error');
@@ -876,7 +882,7 @@ function startAutoSync(){
   stopAutoSync();
   _autoSyncTimer=setInterval(async()=>{
     if(currentUser||isAdminMode) await syncCalendar();
-  },60000);
+  },30000);
 }
 function stopAutoSync(){
   if(_autoSyncTimer){clearInterval(_autoSyncTimer);_autoSyncTimer=null;}
