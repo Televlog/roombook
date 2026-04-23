@@ -340,6 +340,34 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .toast.error{border-color:rgba(239,68,68,.4);}
 .toast.info{border-color:rgba(59,130,246,.4);}
 select option{background:var(--surface2);}
+
+/* ═══════════════════════════════════════════════════
+   OUTLOOK-STYLE DAY VIEW
+═══════════════════════════════════════════════════ */
+.olv-wrap{overflow-x:auto;border-radius:15px;border:1px solid var(--border);background:var(--card);}
+.olv-header-row{display:grid;border-bottom:2px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:5;}
+.olv-th-time{padding:10px 6px;border-right:1px solid var(--border);font-size:.6rem;color:var(--muted);min-width:64px;}
+.olv-th-room{padding:10px 8px;border-right:1px solid var(--border);text-align:center;border-top:3px solid transparent;}
+.olv-th-room-name{font-family:'Syne',sans-serif;font-weight:700;font-size:.76rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.olv-th-room-cap{font-size:.62rem;color:var(--muted);margin-top:2px;}
+.olv-body-wrap{overflow-y:auto;max-height:calc(100vh - 240px);}
+.olv-body{display:grid;}
+.olv-time-col{border-right:1px solid var(--border);min-width:64px;}
+.olv-hour{height:80px;border-bottom:1px solid rgba(30,45,69,.5);padding:5px 6px 0;font-size:.62rem;color:var(--muted);position:relative;}
+.olv-hour::after{content:'';position:absolute;bottom:50%;left:0;right:8px;border-bottom:1px dashed rgba(30,45,69,.3);}
+.olv-room-col{position:relative;border-right:1px solid var(--border);}
+.olv-room-inner{position:relative;}
+.olv-grid-line{position:absolute;left:0;right:0;border-bottom:1px solid rgba(30,45,69,.3);pointer-events:none;}
+.olv-grid-half{position:absolute;left:0;right:0;border-bottom:1px dashed rgba(30,45,69,.15);pointer-events:none;}
+.olv-past{position:absolute;left:0;right:0;top:0;background:rgba(0,0,0,.18);pointer-events:none;z-index:1;}
+.olv-now-line{position:absolute;left:0;right:0;height:2px;background:#ef4444;z-index:4;pointer-events:none;}
+.olv-now-dot{position:absolute;left:-5px;top:-4px;width:10px;height:10px;border-radius:50%;background:#ef4444;}
+.olv-event{position:absolute;left:3px;right:3px;border-radius:7px;padding:5px 7px;cursor:pointer;overflow:hidden;transition:filter .15s,transform .15s;border-left:3px solid;z-index:2;}
+.olv-event:hover{filter:brightness(1.12);transform:scaleX(1.015);}
+.olv-event-title{font-size:.72rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);}
+.olv-event-time{font-size:.63rem;margin-top:2px;white-space:nowrap;}
+.olv-event-org{font-size:.6rem;margin-top:1px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.olv-empty{text-align:center;padding:18px 6px;font-size:.65rem;color:var(--muted);opacity:.5;}
 </style>
 </head>
 <body>
@@ -370,8 +398,8 @@ select option{background:var(--surface2);}
     <div class="login-logo" id="loginLogoDiv">Meeting Room <span>Booking</span></div>
     <div class="login-sub">Meeting Room Management System</div>
     <div class="login-icon">🏢</div>
-    <div class="login-heading">FrontDesk Access</div>
-    <div class="login-desc">Sign in with the <strong style="color:var(--accent)">FrontDesk@inseab.com</strong> account to view and manage all meeting room bookings.</div>
+    <div class="login-heading">Welcome</div>
+    <div class="login-desc">Sign in with your <strong style="color:var(--accent)">Inseab work account</strong> to view live room availability and make bookings.</div>
 
     <button class="btn-ms" onclick="signIn()">
       <svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
@@ -380,7 +408,7 @@ select option{background:var(--surface2);}
         <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
         <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
       </svg>
-      Sign in with FrontDesk Account
+      Sign in with Microsoft
     </button>
 
     <div class="divider">or</div>
@@ -389,7 +417,7 @@ select option{background:var(--surface2);}
       🛡️ Admin Login
     </button>
 
-    <p class="login-note">This system is accessed exclusively via the <strong>FrontDesk@inseab.com</strong> Microsoft account.<br>Admin login is for room configuration only.</p>
+    <p class="login-note">Sign in with your <strong>@inseab.com</strong> work account to access live room schedules.<br>Admin login is for room configuration only.</p>
   </div>
 </div>
 
@@ -486,9 +514,9 @@ select option{background:var(--surface2);}
           <div class="view-subtitle" id="viewSubtitle"></div>
         </div>
         <div class="view-tabs">
-          <button class="view-tab active" onclick="setView('rooms',this)">Rooms</button>
-          <button class="view-tab" onclick="setView('timeline',this)">Timeline</button>
-          <button class="view-tab" onclick="setView('list',this)">All Bookings</button>
+          <button class="view-tab active" onclick="setView('day',this)">📅 Day View</button>
+          <button class="view-tab" onclick="setView('rooms',this)">🏢 Rooms</button>
+          <button class="view-tab" onclick="setView('list',this)">📋 List</button>
         </div>
       </div>
       <div id="viewContent"></div>
@@ -641,14 +669,7 @@ async function signIn(){
   if(!initMSAL()){ showToast('⚙️','Configure Azure Client ID first','error'); return; }
   showScreen('loadingScreen');
   try{
-    const r = await msalInstance.loginPopup({scopes:CONFIG.scopes,prompt:'select_account',loginHint:CONFIG.meetingEmail});
-    const email=(r.account.username||'').toLowerCase();
-    if(email!==CONFIG.meetingEmail.toLowerCase()){
-      await msalInstance.logoutPopup({account:r.account}).catch(()=>{});
-      showScreen('loginScreen');
-      showToast('🚫',`Only ${CONFIG.meetingEmail} is allowed to sign in.`,'error');
-      return;
-    }
+    const r = await msalInstance.loginPopup({scopes:CONFIG.scopes,prompt:'select_account'});
     accessToken=r.accessToken; currentUser=r.account;
     await onSignInSuccess();
   }catch(e){
@@ -795,7 +816,7 @@ async function syncCalendar(){
     const s=now.toISOString();
     const e=new Date(now.getTime()+60*864e5).toISOString();
     const params=`?startDateTime=${s}&endDateTime=${e}&$select=id,subject,organizer,start,end,attendees,location&$top=200`;
-    const data=await graphGet(`/me/calendar/calendarView${params}`);
+    const data=await graphGet(`/users/${CONFIG.meetingEmail}/calendar/calendarView${params}`);
     if(data?.value){
       bookings=data.value.map(ev=>{
         const sd=new Date(ev.start.dateTime+(ev.start.timeZone==='UTC'?'Z':''));
@@ -822,9 +843,9 @@ async function createMSEvent(booking){
     location:{displayName:room?.name||booking.room},
     body:{contentType:'Text',content:`Room: ${room?.name||booking.room}\nOrganizer: ${booking.organizer}\nAttendees: ${booking.attendees}`}
   };
-  return await graphPost(`/me/events`,body);
+  return await graphPost(`/users/${CONFIG.meetingEmail}/events`,body);
 }
-async function deleteMSEvent(msId){ if(msId) return await graphDelete(`/me/events/${msId}`); }
+async function deleteMSEvent(msId){ if(msId) return await graphDelete(`/users/${CONFIG.meetingEmail}/events/${msId}`); }
 function resolveRoomId(email){
   const map={'meetingroom1@yourorg.com':'R1','meetingroom2@yourorg.com':'R2','meetingroom3@yourorg.com':'R3','bigroom@yourorg.com':'R4','hub1@yourorg.com':'R5','hub2@yourorg.com':'R6','hub3@yourorg.com':'R7','hub4@yourorg.com':'R8'};
   return map[email?.toLowerCase()]||'R1';
@@ -855,7 +876,7 @@ function fmt2(n){return String(n).padStart(2,'0');}
 const HOURS=['08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00'];
 const today=new Date();
 let selectedDate=new Date(today), calYear=today.getFullYear(), calMonth=today.getMonth();
-let bookings=[], currentView='timeline', selectedBookingId=null;
+let bookings=[], currentView='day', selectedBookingId=null;
 function dateKey(d){return`${d.getFullYear()}-${fmt2(d.getMonth()+1)}-${fmt2(d.getDate())}`;}
 function selectedKey(){return dateKey(selectedDate);}
 
@@ -910,9 +931,21 @@ function buildForm(){
   ROOMS.forEach(r=>{const o=document.createElement('option');o.value=r.id;o.textContent=`${r.name} · Cap ${r.capacity} · ${r.floor}`;rs.appendChild(o);});
   const ss=document.getElementById('startTime'),es=document.getElementById('endTime');
   ss.innerHTML='';es.innerHTML='';
-  HOURS.forEach(h=>{const o1=document.createElement('option');o1.value=h;o1.textContent=h;ss.appendChild(o1);const o2=document.createElement('option');o2.value=h;o2.textContent=h;es.appendChild(o2);});
-  ss.value='09:00';es.value='10:00';
+  const isToday=selectedKey()===dateKey(today);
+  const nowMins=isToday?today.getHours()*60+today.getMinutes():-1;
+  let firstStart=null,firstEnd=null;
+  HOURS.forEach(h=>{
+    const hm=timeToMins(h);
+    const past=isToday&&hm<=nowMins;
+    const o1=document.createElement('option');o1.value=h;o1.textContent=h;o1.disabled=past;ss.appendChild(o1);
+    if(!past&&!firstStart)firstStart=h;
+    const o2=document.createElement('option');o2.value=h;o2.textContent=h;o2.disabled=past;es.appendChild(o2);
+    if(!past&&hm>(nowMins+30)&&!firstEnd)firstEnd=h;
+  });
+  if(firstStart)ss.value=firstStart;
+  if(firstEnd)es.value=firstEnd;
 }
+function selectDate(d){selectedDate=new Date(d);calYear=d.getFullYear();calMonth=d.getMonth();renderCalendar();updateViewTitle();buildForm();checkConflict();renderView();}
 function timeToMins(t){const[h,m]=t.split(':').map(Number);return h*60+m;}
 function overlaps(s1,e1,s2,e2){return timeToMins(s1)<timeToMins(e2)&&timeToMins(e1)>timeToMins(s2);}
 function checkConflict(){
@@ -923,6 +956,7 @@ function checkConflict(){
   ce.classList.remove('visible');ae.classList.remove('visible');
   if(!room||!start||!end){btn.disabled=false;return;}
   if(timeToMins(start)>=timeToMins(end)){document.getElementById('conflictMsg').textContent='End time must be after start.';ce.classList.add('visible');btn.disabled=true;return;}
+  if(selectedKey()===dateKey(today)&&timeToMins(start)<=today.getHours()*60+today.getMinutes()){document.getElementById('conflictMsg').textContent='Cannot book a time that has already passed.';ce.classList.add('visible');btn.disabled=true;return;}
   const c=bookings.find(b=>b.room===room&&b.date===selectedKey()&&overlaps(start,end,b.start,b.end));
   if(c){document.getElementById('conflictMsg').textContent=`Booked: "${c.title}" (${c.start}–${c.end})`;ce.classList.add('visible');btn.disabled=true;}
   else{ae.classList.add('visible');btn.disabled=false;}
@@ -935,9 +969,9 @@ async function bookRoom(){
   const end=document.getElementById('endTime').value;
   const attendees=document.getElementById('attendees').value||'?';
   if(!title||!organizer||!room){showToast('⚠️','Please fill all required fields.','error');return;}
+  if(selectedKey()===dateKey(today)&&timeToMins(start)<=new Date().getHours()*60+new Date().getMinutes()){showToast('⛔','Cannot book a time that has already passed.','error');return;}
   const btn=document.getElementById('bookBtn');
   btn.disabled=true; btn.textContent='Checking availability…';
-  // Fresh sync from FrontDesk calendar to prevent double booking
   await syncCalendar();
   const conflict=bookings.find(b=>b.room===room&&b.date===selectedKey()&&overlaps(start,end,b.start,b.end));
   if(conflict){
@@ -969,7 +1003,85 @@ async function bookRoom(){
 // VIEWS
 // ════════════════════════════════════════════════════════════
 function setView(v,btn){currentView=v;document.querySelectorAll('.view-tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');renderView();}
-function renderView(){const c=document.getElementById('viewContent');if(currentView==='rooms')c.innerHTML=renderRoomsView();else if(currentView==='timeline')c.innerHTML=renderTimelineView();else c.innerHTML=renderListView();}
+function renderView(){const c=document.getElementById('viewContent');if(currentView==='day')c.innerHTML=renderDayView();else if(currentView==='rooms')c.innerHTML=renderRoomsView();else if(currentView==='timeline')c.innerHTML=renderTimelineView();else c.innerHTML=renderListView();}
+
+// ════════════════════════════════════════════════════════════
+// OUTLOOK-STYLE DAY VIEW
+// ════════════════════════════════════════════════════════════
+const DAY_START=8,DAY_END=19,PX_PER_HOUR=80;
+const DAY_COLORS=[
+  {bg:'rgba(59,130,246,.18)',border:'#3b82f6',time:'#93c5fd'},
+  {bg:'rgba(6,182,212,.18)',border:'#06b6d4',time:'#67e8f9'},
+  {bg:'rgba(139,92,246,.18)',border:'#8b5cf6',time:'#c4b5fd'},
+  {bg:'rgba(236,72,153,.18)',border:'#ec4899',time:'#f9a8d4'},
+  {bg:'rgba(245,158,11,.18)',border:'#f59e0b',time:'#fcd34d'},
+  {bg:'rgba(16,185,129,.18)',border:'#10b981',time:'#6ee7b7'},
+  {bg:'rgba(239,68,68,.18)',border:'#ef4444',time:'#fca5a5'},
+  {bg:'rgba(99,102,241,.18)',border:'#6366f1',time:'#a5b4fc'},
+];
+function minsToTop(t){return(timeToMins(t)-DAY_START*60)/60*PX_PER_HOUR;}
+function renderDayView(){
+  const dk=selectedKey(),isToday=dk===dateKey(today);
+  const now=new Date(),nowMins=now.getHours()*60+now.getMinutes();
+  const totalPx=(DAY_END-DAY_START)*PX_PER_HOUR;
+  const nowTop=((nowMins-DAY_START*60)/60)*PX_PER_HOUR;
+  const cols=ROOMS.length;
+  const gridCols=`64px repeat(${cols},minmax(100px,1fr))`;
+
+  // Time column
+  let timeHtml='';
+  for(let h=DAY_START;h<DAY_END;h++){
+    const lbl=h===12?'12 PM':h<12?h+' AM':(h-12)+' PM';
+    timeHtml+=`<div class="olv-hour">${lbl}</div>`;
+  }
+
+  // Room headers
+  const roomHeaders=ROOMS.map((r,i)=>{
+    const c=DAY_COLORS[i%DAY_COLORS.length];
+    const bks=bookings.filter(b=>b.room===r.id&&b.date===dk).length;
+    return `<div class="olv-th-room" style="border-top:3px solid ${c.border};">
+      <div class="olv-th-room-name">${r.name}</div>
+      <div class="olv-th-room-cap">👥 ${r.capacity} &nbsp;·&nbsp; <span style="color:${c.border}">${bks} booking${bks!==1?'s':''}</span></div>
+    </div>`;
+  }).join('');
+
+  // Room columns
+  const roomCols=ROOMS.map((r,ri)=>{
+    const c=DAY_COLORS[ri%DAY_COLORS.length];
+    const rBks=bookings.filter(b=>b.room===r.id&&b.date===dk);
+    let lines='';
+    for(let h=0;h<(DAY_END-DAY_START);h++){
+      lines+=`<div class="olv-grid-line" style="top:${h*PX_PER_HOUR}px;"></div>`;
+      lines+=`<div class="olv-grid-half" style="top:${h*PX_PER_HOUR+40}px;"></div>`;
+    }
+    const pastH=isToday?Math.min(Math.max(nowTop,0),totalPx):0;
+    const pastOverlay=isToday&&pastH>0?`<div class="olv-past" style="height:${pastH}px;"></div>`:'';
+    const nowLine=isToday&&nowTop>=0&&nowTop<=totalPx?`<div class="olv-now-line" style="top:${nowTop}px;"><div class="olv-now-dot"></div></div>`:'';
+    const blocks=rBks.map(b=>{
+      const top=minsToTop(b.start);
+      const h=Math.max((timeToMins(b.end)-timeToMins(b.start))/60*PX_PER_HOUR-4,22);
+      return `<div class="olv-event" style="top:${top}px;height:${h}px;background:${c.bg};border-left-color:${c.border};" onclick="openModal('${b.id}')">
+        <div class="olv-event-title">${b.title}</div>
+        <div class="olv-event-time" style="color:${c.time};">${b.start}–${b.end}</div>
+        ${h>46?`<div class="olv-event-org">👤 ${b.organizer}</div>`:''}
+      </div>`;
+    }).join('');
+    return `<div class="olv-room-col"><div class="olv-room-inner" style="height:${totalPx}px;">${lines}${pastOverlay}${nowLine}${blocks}${rBks.length===0?`<div class="olv-empty" style="margin-top:${Math.max(nowTop+10,20)}px;">Available</div>`:''}</div></div>`;
+  }).join('');
+
+  return `<div class="olv-wrap">
+    <div class="olv-header-row" style="grid-template-columns:${gridCols};">
+      <div class="olv-th-time" style="text-align:center;font-size:.6rem;color:var(--muted);">TIME</div>
+      ${roomHeaders}
+    </div>
+    <div class="olv-body-wrap">
+      <div class="olv-body" style="grid-template-columns:${gridCols};">
+        <div class="olv-time-col">${timeHtml}</div>
+        ${roomCols}
+      </div>
+    </div>
+  </div>`;
+}
 function getRoomStatus(rid){
   const now=new Date(),nm=now.getHours()*60+now.getMinutes(),dk=selectedKey(),tk=dateKey(today);
   const db=bookings.filter(b=>b.room===rid&&b.date===dk);
