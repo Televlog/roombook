@@ -833,9 +833,10 @@ async function syncCalendar(){
         const sortedRooms=[...ROOMS].sort((a,b)=>b.name.length-a.name.length);
         const matched=sortedRooms.find(r=>combined.includes(r.name.toLowerCase()));
         const room=matched?.id||null;
-        return{id:'ms_'+ev.id,msId:ev.id,date:dateKey(sd),room,title:ev.subject||'(No title)',organizer:ev.organizer?.emailAddress?.name||'—',start:fmt2(sd.getHours())+':'+fmt2(sd.getMinutes()),end:fmt2(ed.getHours())+':'+fmt2(ed.getMinutes()),attendees:ev.attendees?.length||'?',fromMS:true};
-      }).filter(b=>b.room!==null);
-      setSyncStatus('synced',usingFrontDesk?`Live · ${bookings.length} bookings`:`My calendar · ${bookings.length} bookings`);
+        return{id:'ms_'+ev.id,msId:ev.id,date:dateKey(sd),room,title:ev.subject||'(No title)',organizer:ev.organizer?.emailAddress?.name||'—',start:fmt2(sd.getHours())+':'+fmt2(sd.getMinutes()),end:fmt2(ed.getHours())+':'+fmt2(ed.getMinutes()),attendees:ev.attendees?.length||'?',fromMS:true,noRoom:!matched};
+      }); // keep ALL events; noRoom=true ones show in List but not Day grid
+      const roomMatched=bookings.filter(b=>!b.noRoom).length;
+      setSyncStatus('synced',usingFrontDesk?`Live · ${roomMatched} room bookings`:`My calendar · ${roomMatched} bookings`);
       renderCalendar(); renderView();
     }else{
       setSyncStatus('synced','Sync error');
@@ -959,10 +960,13 @@ function buildForm(){
     const o1=document.createElement('option');o1.value=h;o1.textContent=h;o1.disabled=past;ss.appendChild(o1);
     if(!past&&!firstStart)firstStart=h;
     const o2=document.createElement('option');o2.value=h;o2.textContent=h;o2.disabled=past;es.appendChild(o2);
-    if(!past&&hm>(nowMins+30)&&!firstEnd)firstEnd=h;
   });
-  if(firstStart)ss.value=firstStart;
-  if(firstEnd)es.value=firstEnd;
+  // Default start: next available slot; end: start + 1 hour
+  if(firstStart){
+    ss.value=firstStart;
+    const endDefault=HOURS.find(h=>timeToMins(h)>=timeToMins(firstStart)+60);
+    es.value=endDefault||firstStart;
+  }
 }
 function selectDate(d){selectedDate=new Date(d);calYear=d.getFullYear();calMonth=d.getMonth();renderCalendar();updateViewTitle();buildForm();checkConflict();renderView();}
 function timeToMins(t){const[h,m]=t.split(':').map(Number);return h*60+m;}
@@ -1067,7 +1071,7 @@ function renderDayView(){
   // Room columns
   const roomCols=ROOMS.map((r,ri)=>{
     const c=DAY_COLORS[ri%DAY_COLORS.length];
-    const rBks=bookings.filter(b=>b.room===r.id&&b.date===dk);
+    const rBks=bookings.filter(b=>b.room===r.id&&b.date===dk&&!b.noRoom);
     let lines='';
     for(let h=0;h<(DAY_END-DAY_START);h++){
       lines+=`<div class="olv-grid-line" style="top:${h*PX_PER_HOUR}px;"></div>`;
@@ -1144,7 +1148,15 @@ function renderListView(){
   db.forEach(b=>{
     const r=ROOMS.find(x=>x.id===b.room);
     const ms=b.fromMS?'<span class="source-ms">M365</span>':'';
-    h+=`<div class="booking-item"><div class="booking-time-block"><div class="booking-time">${b.start}</div><div class="booking-time-end">→ ${b.end}</div></div><div class="booking-info"><div class="booking-meeting-title">${b.title}${ms}</div><div class="booking-meta"><span>👤 ${b.organizer}</span><span>👥 ${b.attendees}</span><span>🏢 ${r?.floor}</span></div></div><div class="booking-room-tag">${r?.name}</div><button class="btn-delete" onclick="deleteBooking('${b.id}')">Cancel</button></div>`;
+    const roomTag=b.noRoom
+      ?`<div class="booking-room-tag" style="background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3);color:#fcd34d;" title="No room name found in this event — set Location in Outlook to fix">⚠️ No room assigned</div>`
+      :`<div class="booking-room-tag">${r?.name||'Unknown'}</div>`;
+    h+=`<div class="booking-item" style="${b.noRoom?'opacity:.75;border-style:dashed;':''}">
+      <div class="booking-time-block"><div class="booking-time">${b.start}</div><div class="booking-time-end">→ ${b.end}</div></div>
+      <div class="booking-info"><div class="booking-meeting-title">${b.title}${ms}</div>
+      <div class="booking-meta"><span>👤 ${b.organizer}</span><span>👥 ${b.attendees}</span>${b.noRoom?'<span style="color:#fcd34d;font-size:.68rem;">Set Location in Outlook to assign room</span>':''}</div></div>
+      ${roomTag}<button class="btn-delete" onclick="deleteBooking('${b.id}')">Cancel</button>
+    </div>`;
   });
   return h+'</div>';
 }
