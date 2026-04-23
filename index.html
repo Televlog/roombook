@@ -572,9 +572,9 @@ select option{background:var(--surface2);}
 // ║  ⚙️  CONFIGURATION — EDIT THESE VALUES                    ║
 // ╚════════════════════════════════════════════════════════════╝
 const CONFIG = {
-  clientId:    'YOUR_CLIENT_ID',       // Azure App Client ID
-  tenantId:    'YOUR_TENANT_ID',       // Azure Tenant ID
-  meetingEmail:'meetings@yourorg.com', // Your 1 shared org email
+  clientId:    '7983c562-3208-4201-903e-3a27048f524b',
+  tenantId:    '35a90dcc-8370-4664-b027-1b9ff6a5d13e',
+  meetingEmail:'FrontDesk@inseab.com',
   redirectUri: window.location.href.split('?')[0],
   scopes:      ['User.Read','Calendars.ReadWrite']
 };
@@ -803,7 +803,18 @@ async function syncCalendar(){
 }
 async function createMSEvent(booking){
   const room=ROOMS.find(r=>r.id===booking.room);
-  return await graphPost('/me/events',{subject:booking.title,start:{dateTime:`${booking.date}T${booking.start}:00`,timeZone:'Asia/Dubai'},end:{dateTime:`${booking.date}T${booking.end}:00`,timeZone:'Asia/Dubai'},attendees:[{emailAddress:{address:CONFIG.meetingEmail,name:'Meeting Room'},type:'required'}],location:{displayName:room?.name||booking.room}});
+  const body={
+    subject:booking.title,
+    start:{dateTime:`${booking.date}T${booking.start}:00`,timeZone:'Asia/Dubai'},
+    end:{dateTime:`${booking.date}T${booking.end}:00`,timeZone:'Asia/Dubai'},
+    location:{displayName:room?.name||booking.room},
+    attendees:[{emailAddress:{address:CONFIG.meetingEmail,name:'Front Desk'},type:'required'}],
+    body:{contentType:'Text',content:`Room: ${room?.name||booking.room}\nOrganizer: ${booking.organizer}\nAttendees: ${booking.attendees}`}
+  };
+  // Try to write to FrontDesk calendar directly; falls back to signed-in user's calendar
+  const result=await graphPost(`/users/${CONFIG.meetingEmail}/events`,body);
+  if(result) return result;
+  return await graphPost('/me/events',body);
 }
 async function deleteMSEvent(msId){ if(msId) await graphDelete(`/me/events/${msId}`); }
 function resolveRoomId(email){
