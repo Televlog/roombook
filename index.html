@@ -573,14 +573,28 @@ select option{background:var(--surface2);}
   </div>
 </div>
 
-<!-- Modal -->
+<!-- Booking Detail Modal -->
 <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
   <div class="modal">
     <div class="modal-title" id="modalTitle">Details</div>
     <div id="modalBody"></div>
     <div class="modal-actions">
       <button class="modal-btn" onclick="closeModal()">Close</button>
+      <button class="modal-btn" id="modalEditBtn" style="background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.3);color:var(--accent);">✏️ Edit</button>
       <button class="modal-btn danger" id="modalDeleteBtn">Cancel Booking</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Booking Modal -->
+<div class="modal-overlay" id="editOverlay" onclick="closeEditModal(event)">
+  <div class="modal" style="width:460px;max-width:92vw;">
+    <div class="modal-title">✏️ Edit Booking</div>
+    <div id="editForm" style="display:flex;flex-direction:column;gap:11px;"></div>
+    <div id="editConflictMsg" style="display:none;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:7px 11px;font-size:.76rem;color:#fca5a5;margin-top:6px;"></div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="modal-btn" onclick="closeEditModal()">Cancel</button>
+      <button class="modal-btn" id="editSaveBtn" onclick="saveEdit()" style="background:var(--accent);border-color:var(--accent);color:white;font-weight:600;">Save Changes</button>
     </div>
   </div>
 </div>
@@ -810,6 +824,11 @@ async function graphDelete(path){
   const r=await fetch(GRAPH+path,{method:'DELETE',headers:{Authorization:`Bearer ${t}`}});
   return r.ok||r.status===204;
 }
+async function graphPatch(path,body){
+  const t=await getToken(); if(!t) return null;
+  const r=await fetch(GRAPH+path,{method:'PATCH',headers:{Authorization:`Bearer ${t}`,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  return r.ok?r.json():null;
+}
 async function syncCalendar(){
   setSyncStatus('syncing','Syncing…');
   try{
@@ -980,8 +999,8 @@ function checkConflict(){
   if(!room||!start||!end){btn.disabled=false;return;}
   if(timeToMins(start)>=timeToMins(end)){document.getElementById('conflictMsg').textContent='End time must be after start.';ce.classList.add('visible');btn.disabled=true;return;}
   if(selectedKey()===dateKey(today)&&timeToMins(start)<=today.getHours()*60+today.getMinutes()){document.getElementById('conflictMsg').textContent='Cannot book a time that has already passed.';ce.classList.add('visible');btn.disabled=true;return;}
-  const c=bookings.find(b=>b.room===room&&b.date===selectedKey()&&overlaps(start,end,b.start,b.end));
-  if(c){document.getElementById('conflictMsg').textContent=`Booked: "${c.title}" (${c.start}–${c.end})`;ce.classList.add('visible');btn.disabled=true;}
+  const c=bookings.find(b=>b.room===room&&b.date===selectedKey()&&!b.noRoom&&overlaps(start,end,b.start,b.end));
+  if(c){document.getElementById('conflictMsg').textContent=`Already booked: "${c.title}" (${c.start}–${c.end})`;ce.classList.add('visible');btn.disabled=true;}
   else{ae.classList.add('visible');btn.disabled=false;}
 }
 async function bookRoom(){
@@ -996,7 +1015,7 @@ async function bookRoom(){
   const btn=document.getElementById('bookBtn');
   btn.disabled=true; btn.textContent='Checking availability…';
   await syncCalendar();
-  const conflict=bookings.find(b=>b.room===room&&b.date===selectedKey()&&overlaps(start,end,b.start,b.end));
+  const conflict=bookings.find(b=>b.room===room&&b.date===selectedKey()&&!b.noRoom&&overlaps(start,end,b.start,b.end));
   if(conflict){
     showToast('⛔',`Already booked: "${conflict.title}" (${conflict.start}–${conflict.end})`, 'error');
     checkConflict();
@@ -1155,7 +1174,11 @@ function renderListView(){
       <div class="booking-time-block"><div class="booking-time">${b.start}</div><div class="booking-time-end">→ ${b.end}</div></div>
       <div class="booking-info"><div class="booking-meeting-title">${b.title}${ms}</div>
       <div class="booking-meta"><span>👤 ${b.organizer}</span><span>👥 ${b.attendees}</span>${b.noRoom?'<span style="color:#fcd34d;font-size:.68rem;">Set Location in Outlook to assign room</span>':''}</div></div>
-      ${roomTag}<button class="btn-delete" onclick="deleteBooking('${b.id}')">Cancel</button>
+      ${roomTag}
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        ${!b.noRoom?`<button class="btn-delete" style="background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.2);color:var(--accent);" onclick="openEditModal('${b.id}')">✏️ Edit</button>`:''}
+        <button class="btn-delete" onclick="deleteBooking('${b.id}')">Cancel</button>
+      </div>
     </div>`;
   });
   return h+'</div>';
@@ -1171,6 +1194,7 @@ function showRoomDetail(rid){
   if(rb.length){body+=`<div style="margin-top:10px;font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;">Schedule</div>`;rb.sort((a,b)=>a.start.localeCompare(b.start)).forEach(b=>{body+=`<div class="modal-detail"><span class="key">${b.start}–${b.end}</span><span class="val">${b.title}</span></div>`;});}
   document.getElementById('modalBody').innerHTML=body;
   document.getElementById('modalDeleteBtn').style.display='none';
+  document.getElementById('modalEditBtn').style.display='none';
   document.getElementById('modalOverlay').classList.add('open');
 }
 function openModal(bid){
@@ -1181,6 +1205,8 @@ function openModal(bid){
   document.getElementById('modalBody').innerHTML=`<div class="modal-detail"><span class="key">Room</span><span class="val">${r?.name}</span></div><div class="modal-detail"><span class="key">Date</span><span class="val">${b.date}</span></div><div class="modal-detail"><span class="key">Time</span><span class="val">${b.start} – ${b.end}</span></div><div class="modal-detail"><span class="key">Organizer</span><span class="val">${b.organizer}</span></div><div class="modal-detail"><span class="key">Source</span><span class="val">${b.fromMS?'📅 Microsoft 365':'💻 Local'}</span></div>`;
   document.getElementById('modalDeleteBtn').style.display='';
   document.getElementById('modalDeleteBtn').onclick=()=>{deleteBooking(bid);closeModal();};
+  document.getElementById('modalEditBtn').style.display='';
+  document.getElementById('modalEditBtn').onclick=()=>{closeModal();openEditModal(bid);};
   document.getElementById('modalOverlay').classList.add('open');
 }
 function closeModal(e){if(e&&e.target!==document.getElementById('modalOverlay'))return;document.getElementById('modalOverlay').classList.remove('open');}
@@ -1197,6 +1223,69 @@ async function deleteBooking(id){
     setSyncStatus('synced','Cancel failed');
   }
   renderCalendar(); renderView();
+}
+
+// ════════════════════════════════════════════════════════════
+// EDIT BOOKING
+// ════════════════════════════════════════════════════════════
+let editingBookingId=null;
+function openEditModal(bid){
+  const b=bookings.find(x=>x.id===bid);
+  if(!b){showToast('⚠️','Booking not found.','error');return;}
+  editingBookingId=bid;
+  const fieldStyle='width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;color:var(--text);padding:9px 11px;font-size:.84rem;font-family:\'DM Sans\',sans-serif;outline:none;';
+  const labelStyle='display:block;font-size:.7rem;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;';
+  document.getElementById('editForm').innerHTML=`
+    <div><label style="${labelStyle}">Meeting Title</label><input type="text" id="eTitle" value="${b.title}" style="${fieldStyle}"/></div>
+    <div><label style="${labelStyle}">Room</label>
+      <select id="eRoom" style="${fieldStyle}">
+        ${ROOMS.map(r=>`<option value="${r.id}"${r.id===b.room?' selected':''}>${r.name} · Cap ${r.capacity} · ${r.floor}</option>`).join('')}
+      </select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div><label style="${labelStyle}">Start Time</label>
+        <select id="eStart" style="${fieldStyle}">${HOURS.map(h=>`<option${h===b.start?' selected':''}>${h}</option>`).join('')}</select>
+      </div>
+      <div><label style="${labelStyle}">End Time</label>
+        <select id="eEnd" style="${fieldStyle}">${HOURS.map(h=>`<option${h===b.end?' selected':''}>${h}</option>`).join('')}</select>
+      </div>
+    </div>
+    <div><label style="${labelStyle}">Attendees (count)</label><input type="number" id="eAttendees" value="${b.attendees}" min="1" style="${fieldStyle}"/></div>
+  `;
+  document.getElementById('editConflictMsg').style.display='none';
+  document.getElementById('editOverlay').classList.add('open');
+}
+function closeEditModal(e){
+  if(e&&e.target!==document.getElementById('editOverlay'))return;
+  document.getElementById('editOverlay').classList.remove('open');
+  editingBookingId=null;
+}
+async function saveEdit(){
+  const b=bookings.find(x=>x.id===editingBookingId);
+  if(!b){showToast('⚠️','Booking not found.','error');return;}
+  const title=document.getElementById('eTitle').value.trim();
+  const room=document.getElementById('eRoom').value;
+  const start=document.getElementById('eStart').value;
+  const end=document.getElementById('eEnd').value;
+  const attendees=document.getElementById('eAttendees').value||'?';
+  const conflictEl=document.getElementById('editConflictMsg');
+  if(!title){conflictEl.textContent='Please enter a meeting title.';conflictEl.style.display='block';return;}
+  if(timeToMins(start)>=timeToMins(end)){conflictEl.textContent='End time must be after start time.';conflictEl.style.display='block';return;}
+  const conflict=bookings.find(bk=>bk.id!==editingBookingId&&bk.room===room&&bk.date===b.date&&!bk.noRoom&&overlaps(start,end,bk.start,bk.end));
+  if(conflict){conflictEl.textContent=`Conflict with: "${conflict.title}" (${conflict.start}–${conflict.end})`;conflictEl.style.display='block';return;}
+  conflictEl.style.display='none';
+  const btn=document.getElementById('editSaveBtn');
+  btn.disabled=true;btn.textContent='Saving…';
+  const roomObj=ROOMS.find(r=>r.id===room);
+  const patch={subject:title,start:{dateTime:`${b.date}T${start}:00`,timeZone:'Asia/Dubai'},end:{dateTime:`${b.date}T${end}:00`,timeZone:'Asia/Dubai'},location:{displayName:roomObj?.name||room},body:{contentType:'Text',content:`Room: ${roomObj?.name||room}\nOrganizer: ${b.organizer}\nAttendees: ${attendees}`}};
+  let ok=null;
+  if(b.msId){
+    ok=await graphPatch(`/users/${CONFIG.meetingEmail}/events/${b.msId}`,patch);
+    if(!ok) ok=await graphPatch(`/me/events/${b.msId}`,patch);
+  }
+  if(ok){showToast('✅','Booking updated!','success');closeEditModal();await syncCalendar();}
+  else{showToast('❌','Could not update booking.','error');}
+  btn.disabled=false;btn.textContent='Save Changes';
 }
 
 // ════════════════════════════════════════════════════════════
