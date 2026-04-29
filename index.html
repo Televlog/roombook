@@ -842,17 +842,21 @@ async function syncCalendar(){
     if(!data?.value) data=await graphGet(`/me/calendar/calendarView${params}`);
     if(data?.value){
       bookings=data.value.map(ev=>{
-        const sd=new Date(ev.start.dateTime+(ev.start.timeZone==='UTC'?'Z':''));
-        const ed=new Date(ev.end.dateTime+(ev.end.timeZone==='UTC'?'Z':''));
-        // Match room by location field OR event subject (in case location is not set)
+        // Parse Microsoft Graph datetime — always treat as UTC when timeZone is UTC
+        const rawS=ev.start.dateTime+(ev.start.timeZone==='UTC'?'Z':'');
+        const rawE=ev.end.dateTime+(ev.end.timeZone==='UTC'?'Z':'');
+        const sd=new Date(rawS), ed=new Date(rawE);
+        // Normalise to Asia/Dubai so all users see the same times regardless of browser TZ
+        const {date:evDate,time:evStart}=utcToAppTZ(sd);
+        const {time:evEnd}=utcToAppTZ(ed);
+        // Match room by location field OR event subject
         const locName=(ev.location?.displayName||'').toLowerCase();
         const subject=(ev.subject||'').toLowerCase();
         const combined=locName+' '+subject;
-        // Sort rooms longest-name-first so "Big Meeting Room" matches before "Meeting Room"
         const sortedRooms=[...ROOMS].sort((a,b)=>b.name.length-a.name.length);
         const matched=sortedRooms.find(r=>combined.includes(r.name.toLowerCase()));
         const room=matched?.id||null;
-        return{id:'ms_'+ev.id,msId:ev.id,date:dateKey(sd),room,title:ev.subject||'(No title)',organizer:ev.organizer?.emailAddress?.name||'—',start:fmt2(sd.getHours())+':'+fmt2(sd.getMinutes()),end:fmt2(ed.getHours())+':'+fmt2(ed.getMinutes()),attendees:ev.attendees?.length||'?',fromMS:true,noRoom:!matched};
+        return{id:'ms_'+ev.id,msId:ev.id,date:evDate,room,title:ev.subject||'(No title)',organizer:ev.organizer?.emailAddress?.name||'—',start:evStart,end:evEnd,attendees:ev.attendees?.length||'?',fromMS:true,noRoom:!matched};
       }); // keep ALL events; noRoom=true ones show in List but not Day grid
       const roomMatched=bookings.filter(b=>!b.noRoom).length;
       setSyncStatus('synced',usingFrontDesk?`Live · ${roomMatched} room bookings`:`My calendar · ${roomMatched} bookings`);
@@ -864,10 +868,11 @@ async function syncCalendar(){
 }
 async function createMSEvent(booking){
   const room=ROOMS.find(r=>r.id===booking.room);
+  // Always send times as Asia/Dubai — Graph will store correctly in UTC
   const body={
     subject:booking.title,
-    start:{dateTime:`${booking.date}T${booking.start}:00`,timeZone:'Asia/Dubai'},
-    end:{dateTime:`${booking.date}T${booking.end}:00`,timeZone:'Asia/Dubai'},
+    start:{dateTime:`${booking.date}T${booking.start}:00`,timeZone:APP_TZ},
+    end:{dateTime:`${booking.date}T${booking.end}:00`,timeZone:APP_TZ},
     location:{displayName:room?.name||booking.room},
     body:{contentType:'Text',content:`Room: ${room?.name||booking.room}\nOrganizer: ${booking.organizer}\nAttendees: ${booking.attendees}`}
   };
@@ -908,6 +913,27 @@ function stopAutoSync(){
   if(_autoSyncTimer){clearInterval(_autoSyncTimer);_autoSyncTimer=null;}
 }
 function fmt2(n){return String(n).padStart(2,'0');}
+
+// ── All event times are normalised to Asia/Dubai (UTC+4) regardless of
+//    the user's browser timezone, preventing cross-timezone conflict bypasses.
+const APP_TZ='Asia/Dubai';
+function utcToAppTZ(date){
+  try{
+    const parts=new Intl.DateTimeFormat('en-CA',{
+      timeZone:APP_TZ,
+      year:'numeric',month:'2-digit',day:'2-digit',
+      hour:'2-digit',minute:'2-digit',hour12:false
+    }).formatToParts(date);
+    const p={};parts.forEach(x=>p[x.type]=x.value);
+    const hh=(p.hour==='24'?'00':p.hour).padStart(2,'0');
+    const mm=p.minute.padStart(2,'0');
+    return{date:`${p.year}-${p.month}-${p.day}`,time:`${hh}:${mm}`};
+  }catch(e){
+    return{date:dateKey(date),time:fmt2(date.getHours())+':'+fmt2(date.getMinutes())};
+  }
+}
+// Returns today's date string in APP_TZ (not browser local)
+function todayKeyTZ(){return utcToAppTZ(new Date()).date;}
 
 // ════════════════════════════════════════════════════════════
 // BOOKING DATA
@@ -970,8 +996,9 @@ function buildForm(){
   ROOMS.forEach(r=>{const o=document.createElement('option');o.value=r.id;o.textContent=`${r.name} · Cap ${r.capacity} · ${r.floor}`;rs.appendChild(o);});
   const ss=document.getElementById('startTime'),es=document.getElementById('endTime');
   ss.innerHTML='';es.innerHTML='';
-  const isToday=selectedKey()===dateKey(today);
-  const nowMins=isToday?today.getHours()*60+today.getMinutes():-1;
+  const {date:tzTodayKey,time:tzNowTime}=utcToAppTZ(new Date());
+  const isToday=selectedKey()===tzTodayKey;
+  const nowMins=isToday?timeToMins(tzNowTime):-1;
   let firstStart=null,firstEnd=null;
   HOURS.forEach(h=>{
     const hm=timeToMins(h);
@@ -998,7 +1025,8 @@ function checkConflict(){
   ce.classList.remove('visible');ae.classList.remove('visible');
   if(!room||!start||!end){btn.disabled=false;return;}
   if(timeToMins(start)>=timeToMins(end)){document.getElementById('conflictMsg').textContent='End time must be after start.';ce.classList.add('visible');btn.disabled=true;return;}
-  if(selectedKey()===dateKey(today)&&timeToMins(start)<=today.getHours()*60+today.getMinutes()){document.getElementById('conflictMsg').textContent='Cannot book a time that has already passed.';ce.classList.add('visible');btn.disabled=true;return;}
+  const {date:tzToday,time:tzNow}=utcToAppTZ(new Date());
+  if(selectedKey()===tzToday&&timeToMins(start)<=timeToMins(tzNow)){document.getElementById('conflictMsg').textContent='Cannot book a time that has already passed.';ce.classList.add('visible');btn.disabled=true;return;}
   const c=bookings.find(b=>b.room===room&&b.date===selectedKey()&&!b.noRoom&&overlaps(start,end,b.start,b.end));
   if(c){document.getElementById('conflictMsg').textContent=`Already booked: "${c.title}" (${c.start}–${c.end})`;ce.classList.add('visible');btn.disabled=true;}
   else{ae.classList.add('visible');btn.disabled=false;}
@@ -1011,7 +1039,8 @@ async function bookRoom(){
   const end=document.getElementById('endTime').value;
   const attendees=document.getElementById('attendees').value||'?';
   if(!title||!organizer||!room){showToast('⚠️','Please fill all required fields.','error');return;}
-  if(selectedKey()===dateKey(today)&&timeToMins(start)<=new Date().getHours()*60+new Date().getMinutes()){showToast('⛔','Cannot book a time that has already passed.','error');return;}
+  const {date:_tzd,time:_tzn}=utcToAppTZ(new Date());
+  if(selectedKey()===_tzd&&timeToMins(start)<=timeToMins(_tzn)){showToast('⛔','Cannot book a time that has already passed.','error');return;}
   const btn=document.getElementById('bookBtn');
   btn.disabled=true; btn.textContent='Checking availability…';
   await syncCalendar();
@@ -1277,7 +1306,7 @@ async function saveEdit(){
   const btn=document.getElementById('editSaveBtn');
   btn.disabled=true;btn.textContent='Saving…';
   const roomObj=ROOMS.find(r=>r.id===room);
-  const patch={subject:title,start:{dateTime:`${b.date}T${start}:00`,timeZone:'Asia/Dubai'},end:{dateTime:`${b.date}T${end}:00`,timeZone:'Asia/Dubai'},location:{displayName:roomObj?.name||room},body:{contentType:'Text',content:`Room: ${roomObj?.name||room}\nOrganizer: ${b.organizer}\nAttendees: ${attendees}`}};
+  const patch={subject:title,start:{dateTime:`${b.date}T${start}:00`,timeZone:APP_TZ},end:{dateTime:`${b.date}T${end}:00`,timeZone:APP_TZ},location:{displayName:roomObj?.name||room},body:{contentType:'Text',content:`Room: ${roomObj?.name||room}\nOrganizer: ${b.organizer}\nAttendees: ${attendees}`}};
   let ok=null;
   if(b.msId){
     ok=await graphPatch(`/users/${CONFIG.meetingEmail}/events/${b.msId}`,patch);
