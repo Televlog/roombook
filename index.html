@@ -789,7 +789,7 @@ function saveBookingsStore(){
 // ════════════════════════════════════════════════════════════
 // MSAL / SSO
 // ════════════════════════════════════════════════════════════
-let msalInstance=null, currentUser=null, accessToken=null;
+let msalInstance=null, currentUser=null, accessToken=null, currentUserEmail='';
 let isAdminMode=false;
 
 function initMSAL(){
@@ -817,6 +817,7 @@ async function signIn(){
 async function onSignInSuccess(){
   const name=currentUser.name||currentUser.username;
   const email=currentUser.username;
+  currentUserEmail=email; // store globally for booking attribution
   const initials=name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase();
   setUserUI(initials,name,email,false);
   document.getElementById('organizer').value=name;
@@ -956,7 +957,7 @@ async function syncCalendar(){
     const now=new Date();
     const s=now.toISOString();
     const e=new Date(now.getTime()+60*864e5).toISOString();
-    const params=`?startDateTime=${s}&endDateTime=${e}&$select=id,subject,organizer,start,end,attendees,location&$top=200`;
+    const params=`?startDateTime=${s}&endDateTime=${e}&$select=id,subject,organizer,start,end,attendees,location,body&$top=200`;
     // Try FrontDesk calendar; fall back to signed-in user's own calendar
     let data=await graphGet(`/users/${CONFIG.meetingEmail}/calendar/calendarView${params}`);
     const usingFrontDesk=!!data?.value;
@@ -977,7 +978,15 @@ async function syncCalendar(){
         const sortedRooms=[...ROOMS].sort((a,b)=>b.name.length-a.name.length);
         const matched=sortedRooms.find(r=>combined.includes(r.name.toLowerCase()));
         const room=matched?.id||null;
-        return{id:'ms_'+ev.id,msId:ev.id,date:evDate,room,title:ev.subject||'(No title)',organizer:ev.organizer?.emailAddress?.name||'—',start:evStart,end:evEnd,attendees:ev.attendees?.length||'?',fromMS:true,noRoom:!matched};
+        // Extract real organizer from body (embedded when booked via app)
+        const bodyText=ev.body?.content||'';
+        const bodyNameMatch=bodyText.match(/Booked by:\s*(.+?)(?:\n|<|$)/i);
+        const bodyEmailMatch=bodyText.match(/Email:\s*([^\s<\n]+@[^\s<\n]+)/i);
+        // Fallback: find non-FrontDesk attendee, then Graph organizer field
+        const realAttendee=ev.attendees?.find(a=>a.emailAddress?.address?.toLowerCase()!==CONFIG.meetingEmail.toLowerCase()&&a.type!=='resource');
+        const organizer=bodyNameMatch?bodyNameMatch[1].trim():(realAttendee?.emailAddress?.name||ev.organizer?.emailAddress?.name||'—');
+        const organizerEmail=bodyEmailMatch?bodyEmailMatch[1].trim():(realAttendee?.emailAddress?.address||ev.organizer?.emailAddress?.address||'');
+        return{id:'ms_'+ev.id,msId:ev.id,date:evDate,room,title:ev.subject||'(No title)',organizer,organizerEmail,start:evStart,end:evEnd,attendees:ev.attendees?.length||'?',fromMS:true,noRoom:!matched};
       }); // keep ALL events; noRoom=true ones show in List but not Day grid
       const roomMatched=bookings.filter(b=>!b.noRoom).length;
       setSyncStatus('synced',usingFrontDesk?`Live · ${roomMatched} room bookings`:`My calendar · ${roomMatched} bookings`);
@@ -989,13 +998,21 @@ async function syncCalendar(){
 }
 async function createMSEvent(booking){
   const room=ROOMS.find(r=>r.id===booking.room);
-  // Always send times as Asia/Dubai — Graph will store correctly in UTC
+  const bookerName=booking.organizer||currentUser?.name||'Unknown';
+  const bookerEmail=booking.organizerEmail||currentUserEmail||'';
+  const attendees=[];
+  // Add the actual booking user as required attendee so they get a calendar invite
+  if(bookerEmail&&bookerEmail.toLowerCase()!==CONFIG.meetingEmail.toLowerCase()){
+    attendees.push({emailAddress:{address:bookerEmail,name:bookerName},type:'required'});
+  }
   const body={
     subject:booking.title,
     start:{dateTime:`${booking.date}T${booking.start}:00`,timeZone:APP_TZ},
     end:{dateTime:`${booking.date}T${booking.end}:00`,timeZone:APP_TZ},
     location:{displayName:room?.name||booking.room},
-    body:{contentType:'Text',content:`Room: ${room?.name||booking.room}\nOrganizer: ${booking.organizer}\nAttendees: ${booking.attendees}`}
+    attendees,
+    // Embed real organizer in body so it survives FrontDesk ownership
+    body:{contentType:'Text',content:`Room: ${room?.name||booking.room}\nBooked by: ${bookerName}\nEmail: ${bookerEmail}\nAttendees: ${booking.attendees}\n\nBooked via Meeting Room Booking System`}
   };
   // Try FrontDesk calendar directly; fall back to own calendar + invite FrontDesk
   let result=await graphPost(`/users/${CONFIG.meetingEmail}/events`,body);
@@ -1174,7 +1191,7 @@ async function bookRoom(){
   }
   btn.textContent='Creating booking…';
   setSyncStatus('syncing','Creating event…');
-  const booking={id:'b'+Date.now(),date:selectedKey(),room,title,organizer,start,end,attendees,fromMS:false};
+  const booking={id:'b'+Date.now(),date:selectedKey(),room,title,organizer,organizerEmail:currentUserEmail,start,end,attendees,fromMS:false};
   const created=await createMSEvent(booking);
   if(created?.id){
     showToast('✅',`"${title}" booked successfully!`,'success');
@@ -1306,7 +1323,7 @@ function renderDayView(){
       return `<div class="olv-event" style="top:${top}px;height:${h}px;background:${c.bg};border-left-color:${c.border};" onclick="openModal('${b.id}')">
         <div class="olv-event-title">${b.title}</div>
         <div class="olv-event-time" style="color:${c.time};">${b.start}–${b.end}</div>
-        ${h>46?`<div class="olv-event-org">👤 ${b.organizer}</div>`:''}
+        ${h>46?`<div class="olv-event-org">👤 ${b.organizer}${b.organizerEmail?' ('+b.organizerEmail+')':''}</div>`:''}
       </div>`;
     }).join('');
     return `<div class="olv-room-col"><div class="olv-room-inner" style="height:${totalPx}px;">${lines}${pastOverlay}${nowLine}${blocks}${rBks.length===0?`<div class="olv-empty" style="margin-top:${Math.max(nowTop+10,20)}px;">Available</div>`:''}</div></div>`;
@@ -1374,7 +1391,7 @@ function renderListView(){
     h+=`<div class="booking-item" style="${b.noRoom?'opacity:.75;border-style:dashed;':''}">
       <div class="booking-time-block"><div class="booking-time">${b.start}</div><div class="booking-time-end">→ ${b.end}</div></div>
       <div class="booking-info"><div class="booking-meeting-title">${b.title}${ms}</div>
-      <div class="booking-meta"><span>👤 ${b.organizer}</span><span>👥 ${b.attendees}</span>${b.noRoom?'<span style="color:#fcd34d;font-size:.68rem;">Set Location in Outlook to assign room</span>':''}</div></div>
+      <div class="booking-meta"><span>👤 ${b.organizer}${b.organizerEmail?` <span style="opacity:.7">&lt;${b.organizerEmail}&gt;</span>`:''}</span><span>👥 ${b.attendees}</span>${b.noRoom?'<span style="color:#fcd34d;font-size:.68rem;">Set Location in Outlook</span>':''}</div></div>
       ${roomTag}
       <div style="display:flex;flex-direction:column;gap:5px;">
         ${!b.noRoom?`<button class="btn-delete" style="background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.2);color:var(--accent);" onclick="openEditModal('${b.id}')">✏️ Edit</button>`:''}
@@ -1403,7 +1420,14 @@ function openModal(bid){
   const r=ROOMS.find(x=>x.id===b.room);
   selectedBookingId=bid;
   document.getElementById('modalTitle').textContent=b.title;
-  document.getElementById('modalBody').innerHTML=`<div class="modal-detail"><span class="key">Room</span><span class="val">${r?.name}</span></div><div class="modal-detail"><span class="key">Date</span><span class="val">${b.date}</span></div><div class="modal-detail"><span class="key">Time</span><span class="val">${b.start} – ${b.end}</span></div><div class="modal-detail"><span class="key">Organizer</span><span class="val">${b.organizer}</span></div><div class="modal-detail"><span class="key">Source</span><span class="val">${b.fromMS?'📅 Microsoft 365':'💻 Local'}</span></div>`;
+  const orgDisplay=b.organizerEmail?`${b.organizer} <span style="font-size:.78rem;color:var(--muted);font-weight:400;">(${b.organizerEmail})</span>`:b.organizer;
+  document.getElementById('modalBody').innerHTML=`
+    <div class="modal-detail"><span class="key">Room</span><span class="val">${r?.name||'—'}</span></div>
+    <div class="modal-detail"><span class="key">Date</span><span class="val">${b.date}</span></div>
+    <div class="modal-detail"><span class="key">Time</span><span class="val">${b.start} – ${b.end}</span></div>
+    <div class="modal-detail"><span class="key">Booked by</span><span class="val" style="text-align:right;">${orgDisplay}</span></div>
+    <div class="modal-detail"><span class="key">Attendees</span><span class="val">${b.attendees}</span></div>
+    <div class="modal-detail"><span class="key">Source</span><span class="val">${b.fromMS?'📅 Microsoft 365':'💻 Local'}</span></div>`;
   document.getElementById('modalDeleteBtn').style.display='';
   document.getElementById('modalDeleteBtn').onclick=()=>{deleteBooking(bid);closeModal();};
   document.getElementById('modalEditBtn').style.display='';
@@ -1478,7 +1502,8 @@ async function saveEdit(){
   const btn=document.getElementById('editSaveBtn');
   btn.disabled=true;btn.textContent='Saving…';
   const roomObj=ROOMS.find(r=>r.id===room);
-  const patch={subject:title,start:{dateTime:`${b.date}T${start}:00`,timeZone:APP_TZ},end:{dateTime:`${b.date}T${end}:00`,timeZone:APP_TZ},location:{displayName:roomObj?.name||room},body:{contentType:'Text',content:`Room: ${roomObj?.name||room}\nOrganizer: ${b.organizer}\nAttendees: ${attendees}`}};
+  const bookerEmail=b.organizerEmail||currentUserEmail||'';
+  const patch={subject:title,start:{dateTime:`${b.date}T${start}:00`,timeZone:APP_TZ},end:{dateTime:`${b.date}T${end}:00`,timeZone:APP_TZ},location:{displayName:roomObj?.name||room},body:{contentType:'Text',content:`Room: ${roomObj?.name||room}\nBooked by: ${b.organizer}\nEmail: ${bookerEmail}\nAttendees: ${attendees}\n\nBooked via Meeting Room Booking System`}};
   let ok=null;
   if(b.msId){
     ok=await graphPatch(`/users/${CONFIG.meetingEmail}/events/${b.msId}`,patch);
