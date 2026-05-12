@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0e1a" id="themeColorMeta">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
 <title>Meeting Room Booking</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
@@ -342,6 +346,108 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 select option{background:var(--surface2);}
 
 /* ═══════════════════════════════════════════════════
+   LIGHT MODE
+═══════════════════════════════════════════════════ */
+[data-theme="light"]{
+  --bg:#f0f4ff;--surface:#ffffff;--surface2:#f4f7ff;
+  --border:#dde4f0;--text:#111827;--muted:#5a6a8a;--card:#ffffff;
+}
+[data-theme="light"] .app-header{background:rgba(255,255,255,.96);}
+[data-theme="light"] body::before{opacity:.4;}
+[data-theme="light"] .mini-calendar,[data-theme="light"] .booking-form,[data-theme="light"] .booking-item,[data-theme="light"] .room-card,[data-theme="light"] .timeline-container,[data-theme="light"] .olv-wrap{box-shadow:0 2px 12px rgba(100,130,200,.08);}
+[data-theme="light"] .cal-day.today{color:#2563eb;}
+[data-theme="light"] .olv-room-col{background:#fafcff;}
+[data-theme="light"] select option{background:#ffffff;}
+.theme-btn{width:34px;height:34px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);color:var(--text);cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0;}
+.theme-btn:hover{border-color:var(--accent);transform:rotate(20deg);}
+
+/* ═══════════════════════════════════════════════════
+   MOBILE NAV + FAB + DRAWER
+═══════════════════════════════════════════════════ */
+.drawer-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:149;backdrop-filter:blur(3px);}
+.drawer-overlay.open{display:block;}
+.mobile-nav{display:none;}
+.fab-book{display:none;}
+
+/* ═══════════════════════════════════════════════════
+   MOBILE BREAKPOINT ≤ 768px
+═══════════════════════════════════════════════════ */
+@media(max-width:768px){
+  .login-card{padding:32px 22px;border-radius:18px;}
+  .login-logo{font-size:1.5rem;}
+  .app-header{padding:11px 14px;}
+  .header-date{display:none;}
+  .sync-badge{padding:3px 8px;}
+  .sync-badge span{max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  #adminHeaderNav .header-nav-btn{padding:5px 8px;font-size:.7rem;}
+  .app-layout{grid-template-columns:1fr;height:auto;padding-bottom:74px;}
+  .left-panel{
+    position:fixed;top:65px;bottom:70px;left:0;
+    width:min(320px,90vw);z-index:150;
+    transform:translateX(-110%);
+    transition:transform .3s cubic-bezier(.4,0,.2,1);
+    border-right:1px solid var(--border);
+    box-shadow:6px 0 28px rgba(0,0,0,.28);
+    overflow-y:auto;background:var(--surface);
+  }
+  .left-panel.drawer-open{transform:translateX(0);}
+  .right-panel{padding:14px 12px;}
+  .view-header{flex-direction:column;gap:8px;align-items:flex-start;margin-bottom:14px;}
+  .view-title{font-size:1.15rem;}
+  .view-tabs{display:none;}
+  .room-grid{grid-template-columns:1fr 1fr;}
+  .booking-item{flex-wrap:wrap;gap:8px;}
+  .modal-overlay{align-items:flex-end;padding:0;}
+  .modal,.modal[style]{width:100%!important;max-width:100%!important;border-radius:22px 22px 0 0;padding:24px 18px 28px;animation:slideUpM .28s cubic-bezier(.34,1.1,.64,1);}
+  @keyframes slideUpM{from{transform:translateY(100%);opacity:.6}to{transform:translateY(0);opacity:1}}
+  .admin-layout{grid-template-columns:1fr;height:auto;}
+  .admin-sidebar{display:none;}
+  .admin-content{padding:14px 12px;}
+  .stats-row{grid-template-columns:1fr 1fr;gap:10px;}
+  .settings-grid{grid-template-columns:1fr;}
+  .editor-grid{grid-template-columns:1fr;}
+  .olv-wrap{border-radius:10px;-webkit-overflow-scrolling:touch;}
+  .olv-body-wrap{max-height:calc(100svh - 190px);}
+  /* iOS font zoom prevention */
+  .form-group input,.form-group select,.form-group textarea,#editForm input,#editForm select{font-size:16px!important;}
+  /* Mobile nav */
+  .mobile-nav{
+    display:flex;position:fixed;bottom:0;left:0;right:0;
+    background:var(--surface);border-top:1px solid var(--border);
+    z-index:120;padding:5px 0 max(7px,env(safe-area-inset-bottom));
+    box-shadow:0 -2px 20px rgba(0,0,0,.13);
+  }
+  .mnav-btn{
+    flex:1;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:2px;padding:4px 2px;min-height:46px;
+    background:none;border:none;color:var(--muted);cursor:pointer;
+    font-family:'DM Sans',sans-serif;font-size:.58rem;font-weight:500;
+    transition:color .15s;-webkit-tap-highlight-color:transparent;
+  }
+  .mnav-btn.active{color:var(--accent);}
+  .mnav-btn.active .mni{transform:scale(1.15);}
+  .mni{font-size:1.25rem;line-height:1;transition:transform .15s;}
+  /* FAB */
+  .fab-book{
+    display:flex;align-items:center;justify-content:center;
+    position:fixed;bottom:80px;right:14px;
+    width:52px;height:52px;border-radius:50%;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    color:white;border:none;font-size:1.6rem;font-weight:300;
+    cursor:pointer;z-index:111;
+    box-shadow:0 4px 18px rgba(59,130,246,.5);
+    transition:transform .18s,box-shadow .18s;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .fab-book:active{transform:scale(.91);box-shadow:0 2px 10px rgba(59,130,246,.35);}
+}
+@media(max-width:480px){
+  .room-grid{grid-template-columns:1fr;}
+  .stats-row{grid-template-columns:1fr;}
+  .form-row{grid-template-columns:1fr 1fr;}
+}
+
+/* ═══════════════════════════════════════════════════
    OUTLOOK-STYLE DAY VIEW
 ═══════════════════════════════════════════════════ */
 .olv-wrap{overflow-x:auto;border-radius:15px;border:1px solid var(--border);background:var(--card);}
@@ -439,6 +545,7 @@ select option{background:var(--surface2);}
     <div class="header-right">
       <div class="sync-badge" id="syncBadge"><div class="sync-dot"></div><span id="syncText">Synced</span></div>
       <button onclick="syncCalendar()" style="background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.25);color:var(--accent);border-radius:20px;padding:4px 12px;font-size:.72rem;cursor:pointer;font-family:'DM Sans',sans-serif;" title="Refresh calendar now">⟳ Refresh</button>
+      <button class="theme-btn" onclick="toggleTheme()" title="Toggle dark/light mode">🌙</button>
       <div class="header-date" id="headerDate"></div>
       <div class="header-nav" id="adminHeaderNav" style="display:none">
         <button class="header-nav-btn active" onclick="switchToApp(this)">📅 Bookings</button>
@@ -515,14 +622,28 @@ select option{background:var(--surface2);}
           <div class="view-subtitle" id="viewSubtitle"></div>
         </div>
         <div class="view-tabs">
-          <button class="view-tab active" onclick="setView('day',this)">📅 Day View</button>
-          <button class="view-tab" onclick="setView('rooms',this)">🏢 Rooms</button>
-          <button class="view-tab" onclick="setView('list',this)">📋 List</button>
+          <button class="view-tab active" data-view="day" onclick="setView('day',this)">📅 Day View</button>
+          <button class="view-tab" data-view="rooms" onclick="setView('rooms',this)">🏢 Rooms</button>
+          <button class="view-tab" data-view="list" onclick="setView('list',this)">📋 List</button>
         </div>
       </div>
       <div id="viewContent"></div>
     </div>
   </div>
+
+  <!-- Mobile bottom navigation -->
+  <nav class="mobile-nav">
+    <button class="mnav-btn active" id="mnv-day" onclick="mobileNav('day')"><span class="mni">📅</span>Day</button>
+    <button class="mnav-btn" id="mnv-rooms" onclick="mobileNav('rooms')"><span class="mni">🏢</span>Rooms</button>
+    <button class="mnav-btn" id="mnv-list" onclick="mobileNav('list')"><span class="mni">📋</span>List</button>
+    <button class="mnav-btn" id="mnv-menu" onclick="mobileNav('menu')"><span class="mni">☰</span>Menu</button>
+  </nav>
+
+  <!-- FAB quick book -->
+  <button class="fab-book" onclick="openFAB()" title="New Booking">＋</button>
+
+  <!-- Drawer overlay -->
+  <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
 </div>
 
 <!-- ═══════════════════════════════════════════════════
@@ -1073,7 +1194,58 @@ async function bookRoom(){
 // ════════════════════════════════════════════════════════════
 // VIEWS
 // ════════════════════════════════════════════════════════════
-function setView(v,btn){currentView=v;document.querySelectorAll('.view-tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');renderView();}
+function setView(v,btn){
+  currentView=v;
+  document.querySelectorAll('.view-tab').forEach(t=>t.classList.remove('active'));
+  if(btn&&btn.classList) btn.classList.add('active');
+  document.querySelectorAll('.mnav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('mnv-'+v)?.classList.add('active');
+  renderView();
+}
+// ── MOBILE NAVIGATION
+function mobileNav(view){
+  if(view==='menu'){toggleDrawer();return;}
+  document.querySelectorAll('.mnav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('mnv-'+view)?.classList.add('active');
+  document.querySelectorAll('.view-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelector(`.view-tab[data-view="${view}"]`)?.classList.add('active');
+  currentView=view;renderView();closeDrawer();
+}
+// ── DRAWER
+function toggleDrawer(){
+  const p=document.querySelector('#appScreen .left-panel');
+  const o=document.getElementById('drawerOverlay');
+  if(!p)return;
+  p.classList.toggle('drawer-open');
+  o.classList.toggle('open');
+  if(p.classList.contains('drawer-open')) document.getElementById('meetingTitle')?.focus();
+}
+function closeDrawer(){
+  document.querySelector('#appScreen .left-panel')?.classList.remove('drawer-open');
+  document.getElementById('drawerOverlay')?.classList.remove('open');
+}
+// ── FAB
+function openFAB(){
+  const p=document.querySelector('#appScreen .left-panel');
+  const o=document.getElementById('drawerOverlay');
+  if(!p)return;
+  p.classList.add('drawer-open');o.classList.add('open');
+  setTimeout(()=>{document.getElementById('meetingTitle')?.scrollIntoView({behavior:'smooth',block:'start'});document.getElementById('meetingTitle')?.focus();},320);
+}
+// ── THEME
+function toggleTheme(){
+  const curr=document.documentElement.getAttribute('data-theme')||'dark';
+  const next=curr==='light'?'dark':'light';
+  applyThemeMode(next);localStorage.setItem('rb_theme',next);
+}
+function applyThemeMode(mode){
+  document.documentElement.setAttribute('data-theme',mode);
+  const icon=mode==='light'?'🌙':'☀️';
+  document.querySelectorAll('.theme-btn').forEach(b=>b.textContent=icon);
+  const meta=document.getElementById('themeColorMeta');
+  if(meta) meta.content=mode==='light'?'#f0f4ff':'#0a0e1a';
+}
+function applyTheme(){applyThemeMode(localStorage.getItem('rb_theme')||'dark');}
 function renderView(){const c=document.getElementById('viewContent');if(currentView==='day')c.innerHTML=renderDayView();else if(currentView==='rooms')c.innerHTML=renderRoomsView();else if(currentView==='timeline')c.innerHTML=renderTimelineView();else c.innerHTML=renderListView();}
 
 // ════════════════════════════════════════════════════════════
@@ -1769,7 +1941,8 @@ function initApp(){
 
 // Auto-restore MSAL session on page load
 window.addEventListener('load',async()=>{
-  // Apply branding immediately (login screen visible at this point)
+  // Apply branding + theme immediately (login screen visible at this point)
+  applyTheme();
   const s=getSettings();
   document.title=s.siteName||'Meeting Room Booking';
   applyLogo();
