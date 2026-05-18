@@ -372,77 +372,107 @@ select option{background:var(--surface2);}
 /* ═══════════════════════════════════════════════════
    MOBILE BREAKPOINT ≤ 768px
 ═══════════════════════════════════════════════════ */
+/* Mobile calendar view */
+.mob-cal-view{padding:0 4px;}
+.mob-cal-view .mini-calendar{background:var(--card);border:1px solid var(--border);border-radius:16px;margin-bottom:16px;}
+.mob-cal-date-header{font-family:'Syne',sans-serif;font-weight:800;font-size:1.1rem;margin:4px 0 14px;padding:0 2px;}
+.mob-booking-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:border-color .15s;}
+.mob-booking-card:hover,.mob-booking-card:active{border-color:var(--accent);}
+.mob-time-pill{background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.2);border-radius:10px;padding:6px 10px;text-align:center;min-width:62px;flex-shrink:0;}
+.mob-time-pill .t-start{font-family:'Syne',sans-serif;font-weight:700;font-size:.88rem;color:var(--accent);}
+.mob-time-pill .t-end{font-size:.65rem;color:var(--muted);margin-top:1px;}
+.mob-card-info{flex:1;min-width:0;}
+.mob-card-title{font-weight:700;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px;}
+.mob-card-meta{font-size:.72rem;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;}
+.mob-room-tag{background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:.68rem;font-weight:600;white-space:nowrap;align-self:center;flex-shrink:0;}
+.mob-status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.mob-empty{text-align:center;padding:36px 16px;color:var(--muted);}
+.mob-empty .big-icon{font-size:2.5rem;margin-bottom:10px;opacity:.5;}
+
 @media(max-width:768px){
+  /* Header: keep minimal */
   .login-card{padding:32px 22px;border-radius:18px;}
-  .login-logo{font-size:1.5rem;}
   .app-header{padding:11px 14px;}
   .header-date{display:none;}
   .sync-badge{padding:3px 8px;}
-  .sync-badge span{max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  #adminHeaderNav .header-nav-btn{padding:5px 8px;font-size:.7rem;}
-  .app-layout{grid-template-columns:1fr;height:auto;padding-bottom:74px;}
+  .sync-badge span{max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.68rem;}
+  #adminHeaderNav{display:none!important;}
+  /* Layout */
+  .app-layout{grid-template-columns:1fr;height:auto;padding-bottom:76px;}
+  /* Left panel: full-screen drawer */
   .left-panel{
-    position:fixed;top:65px;bottom:70px;left:0;
-    width:min(320px,90vw);z-index:150;
-    transform:translateX(-110%);
-    transition:transform .3s cubic-bezier(.4,0,.2,1);
-    border-right:1px solid var(--border);
-    box-shadow:6px 0 28px rgba(0,0,0,.28);
+    position:fixed;top:0;bottom:0;left:0;right:0;
+    width:100%;z-index:200;
+    transform:translateX(-100%);
+    transition:transform .32s cubic-bezier(.4,0,.2,1);
     overflow-y:auto;background:var(--surface);
+    padding-bottom:80px;
   }
   .left-panel.drawer-open{transform:translateX(0);}
-  .right-panel{padding:14px 12px;}
-  .view-header{flex-direction:column;gap:8px;align-items:flex-start;margin-bottom:14px;}
-  .view-title{font-size:1.15rem;}
+  /* Right panel */
+  .right-panel{padding:12px 10px;}
+  .view-header{margin-bottom:12px;}
+  .view-title{font-size:1.1rem;}
   .view-tabs{display:none;}
-  .room-grid{grid-template-columns:1fr 1fr;}
-  .booking-item{flex-wrap:wrap;gap:8px;}
+  /* Room cards: single column on mobile */
+  .room-grid{grid-template-columns:1fr;gap:10px;}
+  .room-card{padding:14px;}
+  /* Booking items */
+  .booking-item{flex-wrap:wrap;gap:8px;padding:12px;}
+  /* Modals: bottom sheet */
   .modal-overlay{align-items:flex-end;padding:0;}
-  .modal,.modal[style]{width:100%!important;max-width:100%!important;border-radius:22px 22px 0 0;padding:24px 18px 28px;animation:slideUpM .28s cubic-bezier(.34,1.1,.64,1);}
+  .modal,.modal[style]{width:100%!important;max-width:100%!important;border-radius:22px 22px 0 0;padding:24px 18px 32px;animation:slideUpM .28s cubic-bezier(.34,1.1,.64,1);}
   @keyframes slideUpM{from{transform:translateY(100%);opacity:.6}to{transform:translateY(0);opacity:1}}
+  /* Admin */
   .admin-layout{grid-template-columns:1fr;height:auto;}
   .admin-sidebar{display:none;}
   .admin-content{padding:14px 12px;}
   .stats-row{grid-template-columns:1fr 1fr;gap:10px;}
   .settings-grid{grid-template-columns:1fr;}
   .editor-grid{grid-template-columns:1fr;}
+  /* Day view touch */
   .olv-wrap{border-radius:10px;-webkit-overflow-scrolling:touch;}
-  .olv-body-wrap{max-height:calc(100svh - 190px);}
-  /* iOS font zoom prevention */
+  .olv-body-wrap{max-height:calc(100svh - 185px);}
+  /* iOS zoom prevention */
   .form-group input,.form-group select,.form-group textarea,#editForm input,#editForm select{font-size:16px!important;}
-  /* Mobile nav */
+  /* ── Bottom nav ── */
   .mobile-nav{
     display:flex;position:fixed;bottom:0;left:0;right:0;
     background:var(--surface);border-top:1px solid var(--border);
-    z-index:120;padding:5px 0 max(7px,env(safe-area-inset-bottom));
-    box-shadow:0 -2px 20px rgba(0,0,0,.13);
+    z-index:120;padding:6px 0 max(8px,env(safe-area-inset-bottom));
+    box-shadow:0 -2px 16px rgba(0,0,0,.14);
   }
   .mnav-btn{
     flex:1;display:flex;flex-direction:column;align-items:center;
-    justify-content:center;gap:2px;padding:4px 2px;min-height:46px;
+    justify-content:center;gap:3px;padding:4px;min-height:50px;
     background:none;border:none;color:var(--muted);cursor:pointer;
-    font-family:'DM Sans',sans-serif;font-size:.58rem;font-weight:500;
+    font-family:'DM Sans',sans-serif;font-size:.62rem;font-weight:500;
     transition:color .15s;-webkit-tap-highlight-color:transparent;
+    position:relative;
   }
   .mnav-btn.active{color:var(--accent);}
-  .mnav-btn.active .mni{transform:scale(1.15);}
-  .mni{font-size:1.25rem;line-height:1;transition:transform .15s;}
-  /* FAB */
+  .mnav-btn.active .mni{transform:scale(1.18);}
+  .mnav-btn.active::after{content:'';position:absolute;top:0;left:25%;right:25%;height:2px;background:var(--accent);border-radius:0 0 3px 3px;}
+  .mni{font-size:1.3rem;line-height:1;transition:transform .15s;}
+  /* ── FAB ── */
   .fab-book{
-    display:flex;align-items:center;justify-content:center;
-    position:fixed;bottom:80px;right:14px;
-    width:52px;height:52px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;gap:6px;
+    position:fixed;bottom:74px;right:14px;
+    height:52px;padding:0 20px;
+    border-radius:26px;
     background:linear-gradient(135deg,var(--accent),var(--accent2));
-    color:white;border:none;font-size:1.6rem;font-weight:300;
+    color:white;border:none;
+    font-family:'Syne',sans-serif;font-size:.88rem;font-weight:700;
     cursor:pointer;z-index:111;
-    box-shadow:0 4px 18px rgba(59,130,246,.5);
+    box-shadow:0 4px 20px rgba(59,130,246,.5);
     transition:transform .18s,box-shadow .18s;
     -webkit-tap-highlight-color:transparent;
+    white-space:nowrap;
   }
-  .fab-book:active{transform:scale(.91);box-shadow:0 2px 10px rgba(59,130,246,.35);}
+  .fab-book:active{transform:scale(.94);}
+  .fab-icon{font-size:1.2rem;font-weight:300;}
 }
 @media(max-width:480px){
-  .room-grid{grid-template-columns:1fr;}
   .stats-row{grid-template-columns:1fr;}
   .form-row{grid-template-columns:1fr 1fr;}
 }
@@ -566,7 +596,11 @@ select option{background:var(--surface2);}
   <!-- Booking layout -->
   <div class="app-layout">
     <div class="left-panel">
-      <div class="section-label">Select Date</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px 0;margin-bottom:-4px;">
+        <span style="font-family:'Syne',sans-serif;font-weight:800;font-size:1rem;">Menu</span>
+        <button onclick="closeDrawer()" style="background:var(--surface2);border:1px solid var(--border);border-radius:50%;width:32px;height:32px;cursor:pointer;color:var(--muted);font-size:1rem;display:flex;align-items:center;justify-content:center;">✕</button>
+      </div>
+      <div class="section-label" style="margin-top:16px;">Select Date</div>
       <div class="mini-calendar">
         <div class="cal-header">
           <span class="cal-month" id="calMonthLabel"></span>
@@ -631,16 +665,23 @@ select option{background:var(--surface2);}
     </div>
   </div>
 
-  <!-- Mobile bottom navigation -->
+  <!-- Mobile bottom navigation (3 items) -->
   <nav class="mobile-nav">
-    <button class="mnav-btn active" id="mnv-day" onclick="mobileNav('day')"><span class="mni">📅</span>Day</button>
-    <button class="mnav-btn" id="mnv-rooms" onclick="mobileNav('rooms')"><span class="mni">🏢</span>Rooms</button>
-    <button class="mnav-btn" id="mnv-list" onclick="mobileNav('list')"><span class="mni">📋</span>List</button>
-    <button class="mnav-btn" id="mnv-menu" onclick="mobileNav('menu')"><span class="mni">☰</span>Menu</button>
+    <button class="mnav-btn" id="mnv-calendar" onclick="mobileNav('calendar')">
+      <span class="mni">📅</span><span>Calendar</span>
+    </button>
+    <button class="mnav-btn active" id="mnv-rooms" onclick="mobileNav('rooms')">
+      <span class="mni">🏢</span><span>Rooms</span>
+    </button>
+    <button class="mnav-btn" id="mnv-menu" onclick="mobileNav('menu')">
+      <span class="mni">☰</span><span>More</span>
+    </button>
   </nav>
 
-  <!-- FAB quick book -->
-  <button class="fab-book" onclick="openFAB()" title="New Booking">＋</button>
+  <!-- FAB: Book a Room -->
+  <button class="fab-book" onclick="openFAB()" title="Book a Room">
+    <span class="fab-icon">＋</span>
+  </button>
 
   <!-- Drawer overlay -->
   <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
@@ -1152,7 +1193,13 @@ function buildForm(){
     es.value=endDefault||firstStart;
   }
 }
-function selectDate(d){selectedDate=new Date(d);calYear=d.getFullYear();calMonth=d.getMonth();renderCalendar();updateViewTitle();buildForm();checkConflict();renderView();}
+function selectDate(d){
+  selectedDate=new Date(d);calYear=d.getFullYear();calMonth=d.getMonth();
+  renderCalendar();updateViewTitle();buildForm();checkConflict();
+  // If on mobile calendar view, re-render it
+  if(currentView==='mob-calendar')renderView();
+  else renderView();
+}
 function timeToMins(t){const[h,m]=t.split(':').map(Number);return h*60+m;}
 function overlaps(s1,e1,s2,e2){return timeToMins(s1)<timeToMins(e2)&&timeToMins(e1)>timeToMins(s2);}
 function checkConflict(){
@@ -1224,9 +1271,74 @@ function mobileNav(view){
   if(view==='menu'){toggleDrawer();return;}
   document.querySelectorAll('.mnav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('mnv-'+view)?.classList.add('active');
+  closeDrawer();
+  if(view==='calendar'){
+    // Mobile calendar: show date picker + today's booking list
+    currentView='mob-calendar';
+    renderView();
+    return;
+  }
+  currentView=view;
   document.querySelectorAll('.view-tab').forEach(t=>t.classList.remove('active'));
   document.querySelector(`.view-tab[data-view="${view}"]`)?.classList.add('active');
-  currentView=view;renderView();closeDrawer();
+  renderView();
+}
+
+// ── MOBILE CALENDAR VIEW (date picker + day list)
+function renderMobileCalendarView(){
+  const dk=selectedKey();
+  const db=bookings.filter(b=>b.date===dk&&!b.noRoom).sort((a,b)=>a.start.localeCompare(b.start));
+  const dateStr=selectedDate.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  // Re-render the inline mini calendar
+  let calHtml=`<div class="mob-cal-view">
+    <div class="mini-calendar" style="margin:0 0 16px;">
+      <div class="cal-header">
+        <span class="cal-month" id="calMonthLabel2"></span>
+        <div class="cal-nav">
+          <button onclick="changeMonth(-1)">&#8249;</button>
+          <button onclick="changeMonth(1)">&#8250;</button>
+        </div>
+      </div>
+      <div class="cal-grid" id="calGrid2"></div>
+    </div>
+    <div class="mob-cal-date-header">${dateStr}</div>`;
+  if(!db.length){
+    calHtml+=`<div class="mob-empty"><div class="big-icon">📅</div><p>No bookings for this day.</p></div>`;
+  }else{
+    db.forEach(b=>{
+      const r=ROOMS.find(x=>x.id===b.room);
+      const colors=['#3b82f6','#06b6d4','#8b5cf6','#ec4899','#f59e0b','#10b981','#ef4444','#6366f1'];
+      const ci=ROOMS.findIndex(x=>x.id===b.room);
+      const col=colors[ci%colors.length];
+      calHtml+=`<div class="mob-booking-card" onclick="openModal('${b.id}')">
+        <div class="mob-time-pill">
+          <div class="t-start">${b.start}</div>
+          <div class="t-end">${b.end}</div>
+        </div>
+        <div class="mob-card-info">
+          <div class="mob-card-title">${b.title}</div>
+          <div class="mob-card-meta"><span>👤 ${b.organizer}</span><span>👥 ${b.attendees}</span></div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+          <div class="mob-room-tag" style="border-color:${col}20;color:${col};background:${col}12;">${r?.name||'Room'}</div>
+          <div class="mob-status-dot" style="background:${col};box-shadow:0 0 6px ${col};"></div>
+        </div>
+      </div>`;
+    });
+  }
+  calHtml+='</div>';
+  // Render the second calendar grid after inserting HTML
+  setTimeout(()=>{
+    const g2=document.getElementById('calGrid2');
+    const l2=document.getElementById('calMonthLabel2');
+    if(g2&&l2){
+      const g1=document.getElementById('calGrid');
+      const l1=document.getElementById('calMonthLabel');
+      if(g1) g2.innerHTML=g1.innerHTML;
+      if(l1) l2.textContent=l1.textContent;
+    }
+  },0);
+  return calHtml;
 }
 // ── DRAWER
 function toggleDrawer(){
@@ -1263,7 +1375,15 @@ function applyThemeMode(mode){
   if(meta) meta.content=mode==='light'?'#f0f4ff':'#0a0e1a';
 }
 function applyTheme(){applyThemeMode(localStorage.getItem('rb_theme')||'dark');}
-function renderView(){const c=document.getElementById('viewContent');if(currentView==='day')c.innerHTML=renderDayView();else if(currentView==='rooms')c.innerHTML=renderRoomsView();else if(currentView==='timeline')c.innerHTML=renderTimelineView();else c.innerHTML=renderListView();}
+function isMobile(){return window.innerWidth<=768;}
+function renderView(){
+  const c=document.getElementById('viewContent');
+  if(currentView==='mob-calendar')c.innerHTML=renderMobileCalendarView();
+  else if(currentView==='day')c.innerHTML=renderDayView();
+  else if(currentView==='rooms')c.innerHTML=renderRoomsView();
+  else if(currentView==='timeline')c.innerHTML=renderTimelineView();
+  else c.innerHTML=renderListView();
+}
 
 // ════════════════════════════════════════════════════════════
 // OUTLOOK-STYLE DAY VIEW
@@ -1950,6 +2070,12 @@ function initApp(){
   ROOMS=getRooms();
   seedIfEmpty();
   document.getElementById('headerDate').textContent=today.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  // Set default view based on device
+  if(isMobile()){
+    currentView='rooms';
+    document.querySelectorAll('.mnav-btn').forEach(b=>b.classList.remove('active'));
+    document.getElementById('mnv-rooms')?.classList.add('active');
+  }
   buildForm();
   renderCalendar();
   updateViewTitle();
